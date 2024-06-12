@@ -22,19 +22,19 @@ impl<const N: usize> Cipher<N> {
         N == 0
     }
 
-    pub fn bit_pair(&self, idx: usize) -> u8 {
-        let indices = self.bit_pair_indices(idx);
+    pub fn bit_pair(&self, pair_idx: usize) -> u8 {
+        let indices = self.bit_pair_indices(pair_idx);
         self.bit_pair_from_indices(indices)
     }
 
-    pub fn set_bit_pair(&mut self, idx: usize, value: u8) {
-        let indices = self.bit_pair_indices(idx);
+    pub fn set_bit_pair(&mut self, pair_idx: usize, value: u8) {
+        let indices = self.bit_pair_indices(pair_idx);
         self.set_bit_pair_from_indices(indices, value);
     }
 
-    pub fn swap_pair(&mut self, x_idx: usize, y_idx: usize) {
-        let x_indices = self.bit_pair_indices(x_idx);
-        let y_indices = self.bit_pair_indices(y_idx);
+    pub fn swap_pair(&mut self, x_pair_idx: usize, y_pair_idx: usize) {
+        let x_indices = self.bit_pair_indices(x_pair_idx);
+        let y_indices = self.bit_pair_indices(y_pair_idx);
 
         let x_pair = self.bit_pair_from_indices(x_indices);
         let y_pair = self.bit_pair_from_indices(y_indices);
@@ -43,10 +43,22 @@ impl<const N: usize> Cipher<N> {
         self.set_bit_pair_from_indices(y_indices, x_pair);
     }
 
-    fn bit_pair_indices(&self, idx: usize) -> BitPairIndices {
+    pub fn swap_bits_on_pair(&mut self, pair_idx: usize) {
+        let BitPairIndices { byte_idx, bit_idx } = self.bit_pair_indices(pair_idx);
+
+        let bit1 = (self.0[byte_idx] >> bit_idx) & 0b1;
+        let bit2 = (self.0[byte_idx] >> (bit_idx + 1)) & 0b1;
+
+        let mut x = bit1 ^ bit2;
+        x = (x << bit_idx) | (x << (bit_idx + 1));
+
+        self.0[byte_idx] ^= x;
+    }
+
+    fn bit_pair_indices(&self, pair_idx: usize) -> BitPairIndices {
         BitPairIndices {
-            byte_idx: idx / 4,
-            bit_idx: (idx % 4) * 2,
+            byte_idx: pair_idx / 4,
+            bit_idx: (pair_idx % 4) * 2,
         }
     }
 
@@ -64,7 +76,8 @@ impl<const N: usize> Cipher<N> {
     }
 }
 
-pub fn rerandomize<const N: usize>(
+/// Shuffles bit pairs randomly in the same way on both ciphers.
+pub fn shuffle_pairs<const N: usize>(
     x_cipher: &mut Cipher<N>,
     y_cipher: &mut Cipher<N>,
     rng: &mut impl Rng,
@@ -77,6 +90,22 @@ pub fn rerandomize<const N: usize>(
 
         x_cipher.swap_pair(i, j);
         y_cipher.swap_pair(i, j);
+    }
+}
+
+/// Shuffles bits on the pairs randomly in the same way on both ciphers.
+pub fn shuffle_bits<const N: usize>(
+    x_cipher: &mut Cipher<N>,
+    y_cipher: &mut Cipher<N>,
+    rng: &mut impl Rng,
+) {
+    let total_pairs = x_cipher.len() * 4;
+    for idx in 0..total_pairs {
+        // Coin flip 50/50
+        if rng.gen() {
+            x_cipher.swap_bits_on_pair(idx);
+            y_cipher.swap_bits_on_pair(idx);
+        }
     }
 }
 
@@ -99,13 +128,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn shuffle_pairs_test() {
         let mut c1 = Cipher::new([0b00000000, 0b11111111]);
         let mut c2 = Cipher::new([0b11111111, 0b00000000]);
         // The value 7 as a seed makes the bytes swap places
         let mut rng = StdRng::seed_from_u64(7);
 
-        rerandomize(&mut c1, &mut c2, &mut rng);
+        shuffle_pairs(&mut c1, &mut c2, &mut rng);
 
         assert_eq!(c1.as_ref(), &[0b11111111, 0b00000000]);
         assert_eq!(c2.as_ref(), &[0b00000000, 0b11111111]);
@@ -138,5 +167,16 @@ mod tests {
         assert_eq!(cipher.bit_pair(2), 0b01);
         assert_eq!(cipher.bit_pair(4), 0b00);
         assert_eq!(cipher.bit_pair(6), 0b10);
+    }
+
+    #[test]
+    fn swap_bit_pair() {
+        let mut c = Cipher::new([0b00011011, 0b11100100]);
+
+        for idx in 0..8 {
+            c.swap_bits_on_pair(idx);
+        }
+
+        assert_eq!(c.as_ref(), &[0b00100111, 0b11011000]);
     }
 }
