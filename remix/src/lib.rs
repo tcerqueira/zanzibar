@@ -1,5 +1,6 @@
 use rand::{CryptoRng, Rng};
 
+pub mod algorithm;
 pub mod cipher;
 
 pub use cipher::Cipher;
