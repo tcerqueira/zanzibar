@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::{CryptoRng, Rng};
 
 pub mod cipher;
 
@@ -8,7 +8,7 @@ pub use cipher::Cipher;
 fn shuffle_pairs<const N: usize>(
     x_cipher: &mut Cipher<N>,
     y_cipher: &mut Cipher<N>,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) {
     let total_pairs = x_cipher.len() * 4;
     // Fisher-Yates shuffle:
@@ -25,7 +25,7 @@ fn shuffle_pairs<const N: usize>(
 fn shuffle_bits<const N: usize>(
     x_cipher: &mut Cipher<N>,
     y_cipher: &mut Cipher<N>,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) {
     let total_pairs = x_cipher.len() * 4;
     for idx in 0..total_pairs {
