@@ -62,6 +62,7 @@ pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext]) {
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
+    use rstest::{fixture, rstest};
     use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
     use test::Bencher;
 
@@ -69,82 +70,72 @@ mod tests {
 
     const N_SIZE: usize = 32;
 
-    fn setup() -> ((impl Rng + CryptoRng), DecryptionKey) {
-        let mut rng = StdRng::seed_from_u64(7);
+    #[fixture]
+    fn ct1() -> Vec<Ciphertext> {
+        let mut rng = rng();
         let dec_key = DecryptionKey::new(&mut rng);
-
-        (rng, dec_key)
-    }
-
-    #[test]
-    fn test_shuffle_pairs() {
-        let (mut rng, dec_key) = setup();
         let enc_key = dec_key.encryption_key();
 
-        let mut c1: Vec<_> = (0..N_SIZE)
+        (0..N_SIZE)
             .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
-            .collect();
-        let mut c2 = c1.clone();
-
-        let prev_c = c1.clone();
-
-        shuffle_pairs(&mut c1, &mut c2, &mut rng);
-
-        assert_eq!(c1, c2);
-        assert_ne!(prev_c, c1);
+            .collect()
     }
 
-    #[test]
-    fn test_shuffle_bits() {
-        let (mut rng, dec_key) = setup();
-        let enc_key = dec_key.encryption_key();
-
-        let mut c1: Vec<_> = (0..N_SIZE)
-            .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
-            .collect();
-        let mut c2 = c1.clone();
-
-        let prev_c = c1.clone();
-
-        shuffle_bits(&mut c1, &mut c2, &mut rng);
-
-        assert_eq!(c1, c2);
-        assert_ne!(prev_c, c1);
+    #[fixture]
+    fn ct2() -> Vec<Ciphertext> {
+        ct1() // a clone for now
     }
 
-    #[test]
-    fn test_rerandomise() {
-        let (mut rng, dec_key) = setup();
-        let enc_key = dec_key.encryption_key();
-
-        let message: Vec<_> = (0..N_SIZE)
-            .map(|i| &Scalar::from((i % 2) as u8) * &GENERATOR_TABLE)
-            .collect();
-
-        let mut c1: Vec<_> = message
-            .iter()
-            .map(|m| enc_key.encrypt(*m, &mut rng))
-            .collect();
-        let mut c2 = c1.clone();
-
-        rerandomise(&mut c1, &mut c2, &mut rng);
+    #[fixture]
+    fn rng() -> impl Rng + CryptoRng {
+        StdRng::seed_from_u64(7)
     }
 
-    fn setup_bench(num_bits: usize) -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
-        let (mut rng, dec_key) = setup();
-        let enc_key = dec_key.encryption_key();
+    #[rstest]
+    fn test_shuffle_pairs(
+        mut ct1: Vec<Ciphertext>,
+        mut ct2: Vec<Ciphertext>,
+        mut rng: impl Rng + CryptoRng,
+    ) {
+        let prev_ct = ct1.clone();
 
-        let ct1: Vec<_> = (0..num_bits)
-            .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
-            .collect();
-        let ct2 = ct1.clone();
+        shuffle_pairs(&mut ct1, &mut ct2, &mut rng);
 
-        (ct1, ct2, rng)
+        assert_eq!(ct1, ct2);
+        assert_ne!(prev_ct, ct1);
+    }
+
+    #[rstest]
+    fn test_shuffle_bits(
+        mut ct1: Vec<Ciphertext>,
+        mut ct2: Vec<Ciphertext>,
+        mut rng: impl Rng + CryptoRng,
+    ) {
+        let prev_c = ct1.clone();
+
+        shuffle_bits(&mut ct1, &mut ct2, &mut rng);
+
+        assert_eq!(ct1, ct2);
+        assert_ne!(prev_c, ct1);
+    }
+
+    #[rstest]
+    fn test_rerandomise(
+        mut ct1: Vec<Ciphertext>,
+        mut ct2: Vec<Ciphertext>,
+        mut rng: impl Rng + CryptoRng,
+    ) {
+        // dont know how to test this
+        rerandomise(&mut ct1, &mut ct2, &mut rng);
+    }
+
+    fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
+        (ct1(), ct2(), rng())
     }
 
     #[bench]
     fn bench_shuffle_pairs(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+        let (mut ct1, mut ct2, mut rng) = setup_bench();
 
         b.iter(|| {
             shuffle_pairs(&mut ct1, &mut ct2, &mut rng);
@@ -153,7 +144,7 @@ mod tests {
 
     #[bench]
     fn bench_shuffle_bits(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+        let (mut ct1, mut ct2, mut rng) = setup_bench();
 
         b.iter(|| {
             shuffle_bits(&mut ct1, &mut ct2, &mut rng);
@@ -162,7 +153,7 @@ mod tests {
 
     #[bench]
     fn bench_rerandomize(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+        let (mut ct1, mut ct2, mut rng) = setup_bench();
 
         b.iter(|| {
             rerandomise(&mut ct1, &mut ct2, &mut rng);
