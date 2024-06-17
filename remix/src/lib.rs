@@ -159,4 +159,13 @@ mod tests {
             rerandomise(&mut ct1, &mut ct2, &mut rng);
         });
     }
+
+    #[bench]
+    fn bench_remix(b: &mut Bencher) {
+        let (mut ct1, mut ct2, _) = setup_bench();
+
+        b.iter(|| {
+            remix(&mut ct1, &mut ct2);
+        });
+    }
 }
