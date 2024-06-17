@@ -1,89 +1,124 @@
 use rand::{CryptoRng, Rng};
+use rust_elgamal::{Ciphertext, DecryptionKey, Scalar};
+use std::iter::zip;
 
-pub mod algorithm;
-pub mod cipher;
-
-pub use cipher::Cipher;
-
-/// Shuffles bit pairs randomly in the same way on both ciphers.
-fn shuffle_pairs<const N: usize>(
-    x_cipher: &mut Cipher<N>,
-    y_cipher: &mut Cipher<N>,
+fn shuffle_pairs(
+    x_cipher: &mut [Ciphertext],
+    y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
-    let total_pairs = x_cipher.len() * 4;
     // Fisher-Yates shuffle:
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-    for i in (1..total_pairs).rev() {
-        let j = rng.gen_range(0..=i);
+    const STEP: usize = 2;
+    let total_pairs = x_cipher.len() / STEP;
+    for (pair_idx, arr_idx) in (0..x_cipher.len() - STEP).step_by(STEP).enumerate() {
+        let swap_idx = rng.gen_range(pair_idx..total_pairs) * STEP;
 
-        x_cipher.swap_pair(i, j);
-        y_cipher.swap_pair(i, j);
+        x_cipher.swap(arr_idx, swap_idx);
+        x_cipher.swap(arr_idx + 1, swap_idx + 1);
+        y_cipher.swap(arr_idx, swap_idx);
+        y_cipher.swap(arr_idx + 1, swap_idx + 1);
     }
 }
 
-/// Shuffles bits on the pairs randomly in the same way on both ciphers.
-fn shuffle_bits<const N: usize>(
-    x_cipher: &mut Cipher<N>,
-    y_cipher: &mut Cipher<N>,
+fn shuffle_bits(
+    x_cipher: &mut [Ciphertext],
+    y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
-    let total_pairs = x_cipher.len() * 4;
-    for idx in 0..total_pairs {
+    for i in (0..x_cipher.len()).step_by(2) {
         // Coin flip 50/50
         if rng.gen() {
-            x_cipher.swap_bits_on_pair(idx);
-            y_cipher.swap_bits_on_pair(idx);
+            x_cipher.swap(i, i + 1);
+            y_cipher.swap(i, i + 1);
         }
     }
 }
 
-/// Rerandomize algorithm. Takes 2 ciphers and shuffles the bit pairs and the bits on the pairs in the same way on both
-/// ciphers.
-pub fn rerandomize<const N: usize>(x_cipher: &mut Cipher<N>, y_cipher: &mut Cipher<N>) {
+fn rerandomise(
+    x_cipher: &mut [Ciphertext],
+    y_cipher: &mut [Ciphertext],
+    rng: &mut (impl Rng + CryptoRng),
+) {
+    let dec_key = DecryptionKey::new(rng);
+    let enc_key = dec_key.encryption_key();
+    zip(x_cipher, y_cipher).for_each(|(x, y)| {
+        let r = Scalar::from(rng.gen::<u32>());
+        *x = enc_key.rerandomise_with(*x, r);
+        *y = enc_key.rerandomise_with(*y, r);
+    });
+}
+
+pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext]) {
     let mut rng = rand::thread_rng();
     shuffle_pairs(x_cipher, y_cipher, &mut rng);
     shuffle_bits(x_cipher, y_cipher, &mut rng);
+    rerandomise(x_cipher, y_cipher, &mut rng);
 }
 
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
+    use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
 
     use super::*;
 
+    const N_SIZE: usize = 8;
+
     #[test]
     fn shuffle_pairs_test() {
-        let mut c1 = Cipher::new([0b00000000, 0b11111111]);
-        let mut c2 = Cipher::new([0b11111111, 0b00000000]);
-        // The value 7 as a seed makes the bytes swap places
         let mut rng = StdRng::seed_from_u64(7);
+        let dec_key = DecryptionKey::new(&mut rng);
+        let enc_key = dec_key.encryption_key();
+
+        let mut c1: Vec<_> = (0..N_SIZE)
+            .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
+            .collect();
+        let mut c2 = c1.clone();
+
+        let prev_c = c1.clone();
 
         shuffle_pairs(&mut c1, &mut c2, &mut rng);
 
-        assert_eq!(c1, Cipher::new([0b11111111, 0b00000000]));
-        assert_eq!(c2, Cipher::new([0b00000000, 0b11111111]));
+        assert_eq!(c1, c2);
+        assert_ne!(prev_c, c1);
     }
 
     #[test]
     fn shuffle_bits_test() {
-        let mut c1 = Cipher::new([0b10101010, 0b10101010]);
-        let mut c2 = Cipher::new([0b01010101, 0b01010101]);
-        let mut rng = StdRng::seed_from_u64(2);
+        let mut rng = StdRng::seed_from_u64(7);
+        let dec_key = DecryptionKey::new(&mut rng);
+        let enc_key = dec_key.encryption_key();
+
+        let mut c1: Vec<_> = (0..N_SIZE)
+            .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
+            .collect();
+        let mut c2 = c1.clone();
+
+        let prev_c = c1.clone();
 
         shuffle_bits(&mut c1, &mut c2, &mut rng);
 
-        assert_eq!(c1, Cipher::new([0b10011010, 0b10011010]));
-        assert_eq!(c2, Cipher::new([0b01100101, 0b01100101]));
+        assert_eq!(c1, c2);
+        assert_ne!(prev_c, c1);
     }
 
     #[test]
-    fn rerandomize_test() {
-        let mut c1 = Cipher::new([0b00000000, 0b11111111]);
-        let mut c2 = Cipher::new([0b00000000, 0b11111111]);
+    fn rerandomise_test() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let dec_key = DecryptionKey::new(&mut rng);
+        let enc_key = dec_key.encryption_key();
 
-        rerandomize(&mut c1, &mut c2);
+        let message: Vec<_> = (0..N_SIZE)
+            .map(|i| &Scalar::from((i % 2) as u8) * &GENERATOR_TABLE)
+            .collect();
 
-        assert_eq!(c1, c2);
+        let mut c1: Vec<_> = message
+            .iter()
+            .map(|m| enc_key.encrypt(*m, &mut rng))
+            .collect();
+        let mut c2 = c1.clone();
+
+        rerandomise(&mut c1, &mut c2, &mut rng);
     }
 }
