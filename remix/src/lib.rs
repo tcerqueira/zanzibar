@@ -1,3 +1,6 @@
+#![feature(test)]
+extern crate test;
+
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, Scalar};
 use std::iter::zip;
@@ -60,15 +63,22 @@ pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext]) {
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
+    use test::Bencher;
 
     use super::*;
 
-    const N_SIZE: usize = 8;
+    const N_SIZE: usize = 32;
 
-    #[test]
-    fn shuffle_pairs_test() {
+    fn setup() -> ((impl Rng + CryptoRng), DecryptionKey) {
         let mut rng = StdRng::seed_from_u64(7);
         let dec_key = DecryptionKey::new(&mut rng);
+
+        (rng, dec_key)
+    }
+
+    #[test]
+    fn test_shuffle_pairs() {
+        let (mut rng, dec_key) = setup();
         let enc_key = dec_key.encryption_key();
 
         let mut c1: Vec<_> = (0..N_SIZE)
@@ -85,9 +95,8 @@ mod tests {
     }
 
     #[test]
-    fn shuffle_bits_test() {
-        let mut rng = StdRng::seed_from_u64(7);
-        let dec_key = DecryptionKey::new(&mut rng);
+    fn test_shuffle_bits() {
+        let (mut rng, dec_key) = setup();
         let enc_key = dec_key.encryption_key();
 
         let mut c1: Vec<_> = (0..N_SIZE)
@@ -104,9 +113,8 @@ mod tests {
     }
 
     #[test]
-    fn rerandomise_test() {
-        let mut rng = StdRng::seed_from_u64(7);
-        let dec_key = DecryptionKey::new(&mut rng);
+    fn test_rerandomise() {
+        let (mut rng, dec_key) = setup();
         let enc_key = dec_key.encryption_key();
 
         let message: Vec<_> = (0..N_SIZE)
@@ -120,5 +128,44 @@ mod tests {
         let mut c2 = c1.clone();
 
         rerandomise(&mut c1, &mut c2, &mut rng);
+    }
+
+    fn setup_bench(num_bits: usize) -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
+        let (mut rng, dec_key) = setup();
+        let enc_key = dec_key.encryption_key();
+
+        let ct1: Vec<_> = (0..num_bits)
+            .map(|i| enc_key.encrypt(&Scalar::from((i % 2) as u8) * &GENERATOR_TABLE, &mut rng))
+            .collect();
+        let ct2 = ct1.clone();
+
+        (ct1, ct2, rng)
+    }
+
+    #[bench]
+    fn bench_shuffle_pairs(b: &mut Bencher) {
+        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+
+        b.iter(|| {
+            shuffle_pairs(&mut ct1, &mut ct2, &mut rng);
+        });
+    }
+
+    #[bench]
+    fn bench_shuffle_bits(b: &mut Bencher) {
+        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+
+        b.iter(|| {
+            shuffle_bits(&mut ct1, &mut ct2, &mut rng);
+        });
+    }
+
+    #[bench]
+    fn bench_rerandomize(b: &mut Bencher) {
+        let (mut ct1, mut ct2, mut rng) = setup_bench(N_SIZE);
+
+        b.iter(|| {
+            rerandomise(&mut ct1, &mut ct2, &mut rng);
+        });
     }
 }
