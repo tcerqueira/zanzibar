@@ -1,5 +1,6 @@
 use rand::{CryptoRng, Rng};
-use rust_elgamal::Ciphertext;
+use rust_elgamal::{Ciphertext, DecryptionKey, Scalar};
+use std::iter::zip;
 
 fn shuffle_pairs(
     x_cipher: &mut [Ciphertext],
@@ -34,6 +35,20 @@ fn shuffle_bits(
     }
 }
 
+pub fn rerandomise(
+    x_cipher: &mut [Ciphertext],
+    y_cipher: &mut [Ciphertext],
+    rng: &mut (impl Rng + CryptoRng),
+) {
+    let dec_key = DecryptionKey::new(rng);
+    let enc_key = dec_key.encryption_key();
+    zip(x_cipher, y_cipher).for_each(|(x, y)| {
+        let r = Scalar::from(rng.gen::<u32>());
+        *x = enc_key.rerandomise_with(*x, r);
+        *y = enc_key.rerandomise_with(*y, r);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use rand::{rngs::StdRng, SeedableRng};
@@ -41,7 +56,7 @@ mod tests {
 
     use super::*;
 
-    const N_SIZE: usize = 256;
+    const N_SIZE: usize = 8;
 
     #[test]
     fn shuffle_pairs_test() {
@@ -79,5 +94,24 @@ mod tests {
 
         assert_eq!(c1, c2);
         assert_ne!(prev_c, c1);
+    }
+
+    #[test]
+    fn rerandomise_test() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let dec_key = DecryptionKey::new(&mut rng);
+        let enc_key = dec_key.encryption_key();
+
+        let message: Vec<_> = (0..N_SIZE)
+            .map(|i| &Scalar::from((i % 2) as u8) * &GENERATOR_TABLE)
+            .collect();
+
+        let mut c1: Vec<_> = message
+            .iter()
+            .map(|m| enc_key.encrypt(*m, &mut rng))
+            .collect();
+        let mut c2 = c1.clone();
+
+        rerandomise(&mut c1, &mut c2, &mut rng);
     }
 }
