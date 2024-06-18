@@ -2,10 +2,10 @@
 extern crate test;
 
 use rand::{CryptoRng, Rng};
-use rust_elgamal::{Ciphertext, DecryptionKey, Scalar};
+use rust_elgamal::{Ciphertext, Scalar, GENERATOR_TABLE};
 use std::iter::zip;
 
-fn shuffle_pairs(
+pub fn shuffle_pairs(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
@@ -24,7 +24,7 @@ fn shuffle_pairs(
     }
 }
 
-fn shuffle_bits(
+pub fn shuffle_bits(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
@@ -38,17 +38,15 @@ fn shuffle_bits(
     }
 }
 
-fn rerandomise(
+pub fn rerandomise(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
-    let dec_key = DecryptionKey::new(rng);
-    let enc_key = dec_key.encryption_key();
     zip(x_cipher, y_cipher).for_each(|(x, y)| {
-        let r = Scalar::from(rng.gen::<u32>());
-        *x = enc_key.rerandomise_with(*x, r);
-        *y = enc_key.rerandomise_with(*y, r);
+        let r_g = &Scalar::from(rng.gen::<u32>()) * &GENERATOR_TABLE;
+        *x = *x + &Ciphertext::from((r_g, r_g));
+        *y = *y + &Ciphertext::from((r_g, r_g));
     });
 }
 
