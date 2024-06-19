@@ -1,6 +1,3 @@
-#![feature(test)]
-extern crate test;
-
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 use std::iter::zip;
@@ -64,7 +61,6 @@ mod tests {
     use rstest::{fixture, rstest};
     use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
     use std::slice;
-    use test::Bencher;
 
     use super::*;
 
@@ -141,47 +137,5 @@ mod tests {
 
         assert_eq!(message, dec_key.decrypt(ct1));
         assert_eq!(message, dec_key.decrypt(ct2));
-    }
-
-    fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
-        (ct1(), ct2(), rng())
-    }
-
-    #[bench]
-    fn bench_shuffle_pairs(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench();
-
-        b.iter(|| {
-            shuffle_pairs(&mut ct1, &mut ct2, &mut rng);
-        });
-    }
-
-    #[bench]
-    fn bench_shuffle_bits(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench();
-
-        b.iter(|| {
-            shuffle_bits(&mut ct1, &mut ct2, &mut rng);
-        });
-    }
-
-    #[bench]
-    fn bench_rerandomize(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench();
-        let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
-
-        b.iter(|| {
-            rerandomise(&mut ct1, &mut ct2, &enc_key, &mut rng);
-        });
-    }
-
-    #[bench]
-    fn bench_remix(b: &mut Bencher) {
-        let (mut ct1, mut ct2, mut rng) = setup_bench();
-        let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
-
-        b.iter(|| {
-            remix(&mut ct1, &mut ct2, &enc_key);
-        });
     }
 }

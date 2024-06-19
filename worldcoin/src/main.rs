@@ -74,8 +74,6 @@ fn decrypt_bits<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::slice::from_mut;
-
     use super::*;
 
     #[test]
@@ -86,57 +84,5 @@ mod tests {
         let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
 
         assert_eq!(enc_bits, expected);
-    }
-
-    #[test]
-    fn rand_rerandomize() {
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
-        use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
-
-        // const N: usize = 100;
-
-        let mut rng = StdRng::from_entropy();
-        let dec_key = DecryptionKey::new(&mut rng);
-        let enc_key = dec_key.encryption_key();
-
-        let message = &Scalar::from(5u32) * &GENERATOR_TABLE;
-        let mut encrypted = enc_key.encrypt(message, &mut rng);
-        // added
-        {
-            encrypted = enc_key.rerandomise(encrypted, &mut rng);
-        }
-        // ---
-        let decrypted = dec_key.decrypt(encrypted);
-        assert_eq!(message, decrypted);
-    }
-
-    #[test]
-    fn custom_rerandomize() {
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
-        use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
-
-        // const N: usize = 100;
-
-        let mut rng = StdRng::from_entropy();
-        let dec_key = DecryptionKey::new(&mut rng);
-        let enc_key = dec_key.encryption_key();
-
-        let message = &Scalar::from(5u32) * &GENERATOR_TABLE;
-        let mut encrypted = enc_key.encrypt(message, &mut rng);
-        let mut encrypted2 = enc_key.encrypt(message, &mut rng);
-        // added
-        {
-            remix::rerandomise(
-                from_mut(&mut encrypted),
-                from_mut(&mut encrypted2),
-                enc_key,
-                &mut rng,
-            );
-        }
-        // ---
-        let decrypted = dec_key.decrypt(encrypted);
-        assert_eq!(message, decrypted);
     }
 }
