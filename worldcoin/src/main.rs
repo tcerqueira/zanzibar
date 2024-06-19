@@ -11,10 +11,6 @@ fn main() {
 
     let ct1 = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_SIZE]>());
     let ct2 = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_SIZE]>());
-    dbg!(ct1.count_ones());
-    dbg!(ct2.count_ones());
-    dbg!(ct1.capacity());
-    dbg!(ct1.len());
 
     // Encode bits
     let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_SIZE * 2);
@@ -34,7 +30,7 @@ fn main() {
     let start = std::time::Instant::now();
     remix::shuffle_pairs(&mut enc_new_user, &mut enc_archived_user, &mut rng);
     remix::shuffle_bits(&mut enc_new_user, &mut enc_archived_user, &mut rng);
-    remix::rerandomise(&mut enc_new_user, &mut enc_archived_user, &mut rng);
+    remix::rerandomise(&mut enc_new_user, &mut enc_archived_user, enc_key, &mut rng);
     let duration = std::time::Instant::now() - start;
     println!("shuffle + rerandomize: {duration:?}");
 
@@ -78,6 +74,8 @@ fn decrypt_bits<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::slice::from_mut;
+
     use super::*;
 
     #[test]
@@ -107,6 +105,35 @@ mod tests {
         // added
         {
             encrypted = enc_key.rerandomise(encrypted, &mut rng);
+        }
+        // ---
+        let decrypted = dec_key.decrypt(encrypted);
+        assert_eq!(message, decrypted);
+    }
+
+    #[test]
+    fn custom_rerandomize() {
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+        use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
+
+        // const N: usize = 100;
+
+        let mut rng = StdRng::from_entropy();
+        let dec_key = DecryptionKey::new(&mut rng);
+        let enc_key = dec_key.encryption_key();
+
+        let message = &Scalar::from(5u32) * &GENERATOR_TABLE;
+        let mut encrypted = enc_key.encrypt(message, &mut rng);
+        let mut encrypted2 = enc_key.encrypt(message, &mut rng);
+        // added
+        {
+            remix::rerandomise(
+                from_mut(&mut encrypted),
+                from_mut(&mut encrypted2),
+                enc_key,
+                &mut rng,
+            );
         }
         // ---
         let decrypted = dec_key.decrypt(encrypted);

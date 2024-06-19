@@ -7,5 +7,8 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
-rstest = "0.21.0"
 rust-elgamal = "0.4.0"
+
+[dev-dependencies]
+rstest = "0.21.0"
+

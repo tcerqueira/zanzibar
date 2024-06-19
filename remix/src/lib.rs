@@ -2,7 +2,7 @@
 extern crate test;
 
 use rand::{CryptoRng, Rng};
-use rust_elgamal::{Ciphertext, Scalar, GENERATOR_TABLE};
+use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 use std::iter::zip;
 
 pub fn shuffle_pairs(
@@ -41,20 +41,21 @@ pub fn shuffle_bits(
 pub fn rerandomise(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
+    enc_key: &EncryptionKey,
     rng: &mut (impl Rng + CryptoRng),
 ) {
     zip(x_cipher, y_cipher).for_each(|(x, y)| {
-        let r_g = &Scalar::from(rng.gen::<u32>()) * &GENERATOR_TABLE;
-        *x = *x + &Ciphertext::from((r_g, r_g));
-        *y = *y + &Ciphertext::from((r_g, r_g));
+        let r = Scalar::from(rng.gen::<u32>());
+        enc_key.rerandomise_with(*x, r);
+        enc_key.rerandomise_with(*y, r);
     });
 }
 
-pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext]) {
+pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext], enc_key: &EncryptionKey) {
     let mut rng = rand::thread_rng();
     shuffle_pairs(x_cipher, y_cipher, &mut rng);
     shuffle_bits(x_cipher, y_cipher, &mut rng);
-    rerandomise(x_cipher, y_cipher, &mut rng);
+    rerandomise(x_cipher, y_cipher, enc_key, &mut rng);
 }
 
 #[cfg(test)]
@@ -62,6 +63,7 @@ mod tests {
     use rand::{rngs::StdRng, SeedableRng};
     use rstest::{fixture, rstest};
     use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
+    use std::slice;
     use test::Bencher;
 
     use super::*;
@@ -69,9 +71,20 @@ mod tests {
     const N_SIZE: usize = 32;
 
     #[fixture]
+    fn rng() -> impl Rng + CryptoRng {
+        StdRng::seed_from_u64(7)
+    }
+
+    #[fixture]
+    fn dec_key() -> DecryptionKey {
+        let mut rng = rng();
+        DecryptionKey::new(&mut rng)
+    }
+
+    #[fixture]
     fn ct1() -> Vec<Ciphertext> {
         let mut rng = rng();
-        let dec_key = DecryptionKey::new(&mut rng);
+        let dec_key = dec_key();
         let enc_key = dec_key.encryption_key();
 
         (0..N_SIZE)
@@ -82,11 +95,6 @@ mod tests {
     #[fixture]
     fn ct2() -> Vec<Ciphertext> {
         ct1() // a clone for now
-    }
-
-    #[fixture]
-    fn rng() -> impl Rng + CryptoRng {
-        StdRng::seed_from_u64(7)
     }
 
     #[rstest]
@@ -118,13 +126,21 @@ mod tests {
     }
 
     #[rstest]
-    fn test_rerandomise(
-        mut ct1: Vec<Ciphertext>,
-        mut ct2: Vec<Ciphertext>,
-        mut rng: impl Rng + CryptoRng,
-    ) {
-        // dont know how to test this
-        rerandomise(&mut ct1, &mut ct2, &mut rng);
+    fn test_rerandomise(mut rng: impl Rng + CryptoRng, dec_key: DecryptionKey) {
+        let message = &Scalar::from(123456789u32) * &GENERATOR_TABLE;
+        let mut ct1 = dec_key.encryption_key().encrypt(message, &mut rng);
+        let mut ct2 = dec_key.encryption_key().encrypt(message, &mut rng);
+        assert_ne!(ct1, ct2);
+
+        rerandomise(
+            slice::from_mut(&mut ct1),
+            slice::from_mut(&mut ct2),
+            dec_key.encryption_key(),
+            &mut rng,
+        );
+
+        assert_eq!(message, dec_key.decrypt(ct1));
+        assert_eq!(message, dec_key.decrypt(ct2));
     }
 
     fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
@@ -152,18 +168,20 @@ mod tests {
     #[bench]
     fn bench_rerandomize(b: &mut Bencher) {
         let (mut ct1, mut ct2, mut rng) = setup_bench();
+        let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
         b.iter(|| {
-            rerandomise(&mut ct1, &mut ct2, &mut rng);
+            rerandomise(&mut ct1, &mut ct2, &enc_key, &mut rng);
         });
     }
 
     #[bench]
     fn bench_remix(b: &mut Bencher) {
-        let (mut ct1, mut ct2, _) = setup_bench();
+        let (mut ct1, mut ct2, mut rng) = setup_bench();
+        let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
         b.iter(|| {
-            remix(&mut ct1, &mut ct2);
+            remix(&mut ct1, &mut ct2, &enc_key);
         });
     }
 }
