@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
+rayon = "1.10.0"
 rust-elgamal = "0.4.0"
 
 [dev-dependencies]
@@ -16,4 +17,3 @@ criterion = "0.5"
 [[bench]]
 name = "remix"
 harness = false
-

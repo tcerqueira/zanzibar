@@ -2,6 +2,8 @@ use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 use std::iter::zip;
 
+pub mod par;
+
 pub fn shuffle_pairs(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],

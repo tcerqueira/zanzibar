@@ -46,7 +46,7 @@ fn bench_shuffle_bits(c: &mut Criterion) {
 
 fn bench_rerandomise(c: &mut Criterion) {
     let mut group = c.benchmark_group("Rerandomise");
-    group.sample_size(10);
+    group.sample_size(20);
 
     let (mut ct1, mut ct2, mut rng) = setup_bench();
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
@@ -56,11 +56,17 @@ fn bench_rerandomise(c: &mut Criterion) {
             remix::rerandomise(&mut ct1, &mut ct2, &enc_key, &mut rng);
         })
     });
+
+    group.bench_function("parallel", |b| {
+        b.iter(|| {
+            remix::par::rerandomise(&mut ct1, &mut ct2, &enc_key);
+        })
+    });
 }
 
 fn bench_all(c: &mut Criterion) {
     let mut group = c.benchmark_group("All");
-    group.sample_size(10);
+    group.sample_size(20);
 
     let (mut ct1, mut ct2, mut rng) = setup_bench();
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
@@ -68,6 +74,12 @@ fn bench_all(c: &mut Criterion) {
     group.bench_function("base", |b| {
         b.iter(|| {
             remix::remix(&mut ct1, &mut ct2, &enc_key);
+        })
+    });
+
+    group.bench_function("parallel", |b| {
+        b.iter(|| {
+            remix::par::remix(&mut ct1, &mut ct2, &enc_key);
         })
     });
 }
