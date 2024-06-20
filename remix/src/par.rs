@@ -13,7 +13,7 @@ pub fn rerandomise(
         let mut rng = rand::thread_rng();
         let r = Scalar::from(rng.gen::<u32>());
         *x = enc_key.rerandomise_with(*x, r);
-        *x = enc_key.rerandomise_with(*y, r);
+        *y = enc_key.rerandomise_with(*y, r);
     });
 }
 
@@ -48,8 +48,13 @@ mod tests {
 
         let mut ct1: Vec<_> = message1.iter().map(&mut encrypt).collect();
         let mut ct2: Vec<_> = message2.iter().map(&mut encrypt).collect();
+        let prev_ct1 = ct1.clone();
+        let prev_ct2 = ct2.clone();
 
         rerandomise(&mut ct1, &mut ct2, dec_key.encryption_key());
+
+        assert_ne!(prev_ct1, ct1);
+        assert_ne!(prev_ct2, ct2);
 
         let mut decrypt = |ct: &Ciphertext| -> RistrettoPoint { dec_key.decrypt(*ct) };
         assert!(Iterator::eq(

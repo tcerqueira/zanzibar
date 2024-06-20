@@ -45,8 +45,8 @@ pub fn rerandomise(
 ) {
     zip(x_cipher, y_cipher).for_each(|(x, y)| {
         let r = Scalar::from(rng.gen::<u32>());
-        enc_key.rerandomise_with(*x, r);
-        enc_key.rerandomise_with(*y, r);
+        *x = enc_key.rerandomise_with(*x, r);
+        *y = enc_key.rerandomise_with(*y, r);
     });
 }
 
@@ -128,7 +128,10 @@ mod tests {
         let message = &Scalar::from(123456789u32) * &GENERATOR_TABLE;
         let mut ct1 = dec_key.encryption_key().encrypt(message, &mut rng);
         let mut ct2 = dec_key.encryption_key().encrypt(message, &mut rng);
+
         assert_ne!(ct1, ct2);
+        let prev_ct1 = ct1;
+        let prev_ct2 = ct2;
 
         rerandomise(
             slice::from_mut(&mut ct1),
@@ -137,6 +140,8 @@ mod tests {
             &mut rng,
         );
 
+        assert_ne!(prev_ct1, ct1);
+        assert_ne!(prev_ct2, ct2);
         assert_eq!(message, dec_key.decrypt(ct1));
         assert_eq!(message, dec_key.decrypt(ct2));
     }
