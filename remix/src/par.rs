@@ -2,6 +2,7 @@ use rand::Rng;
 use rayon::prelude::*;
 use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 
+/// Same as [rerandomise](fn@super::rerandomise) but in parallel using [`rayon`].
 pub fn rerandomise(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
@@ -17,6 +18,7 @@ pub fn rerandomise(
     });
 }
 
+/// Same as [remix](fn@super::remix) but uses parallel [`rerandomise`].
 pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext], enc_key: &EncryptionKey) {
     let mut rng = rand::thread_rng();
     super::shuffle_pairs(x_cipher, y_cipher, &mut rng);

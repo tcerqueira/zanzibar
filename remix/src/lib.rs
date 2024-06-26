@@ -1,21 +1,31 @@
+//! Implementation of the re-mixing described in the article :TBD:.
+
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 use std::iter::zip;
 
 pub mod par;
 
+/// Shuffles groups of 2 [`Ciphertext`]s randomly but equally for both slices.
+/// So, the ciphertext of the slices at given index before shuffling will endup randomly but at the same index after
+/// the shuffle.
+/// If the length of the slice it's not divisible by 2, meaning there's an incomplete pair, that lonely ciphertext is
+/// not shuffled.
+/// Internally, it uses the [Fisher-Yates shuffle].
+///
+/// [Fisher-Yates shuffle]: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
 pub fn shuffle_pairs(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
-    // Fisher-Yates shuffle:
-    // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+    // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     const STEP: usize = 2;
     let total_pairs = x_cipher.len() / STEP;
     for (pair_idx, arr_idx) in (0..x_cipher.len() - STEP).step_by(STEP).enumerate() {
         let swap_idx = rng.gen_range(pair_idx..total_pairs) * STEP;
 
+        // TODO: make it more generic over STEP, this only works for pairs (STEP=2)
         x_cipher.swap(arr_idx, swap_idx);
         x_cipher.swap(arr_idx + 1, swap_idx + 1);
         y_cipher.swap(arr_idx, swap_idx);
@@ -23,11 +33,14 @@ pub fn shuffle_pairs(
     }
 }
 
+/// Iterates over every pair of [`Ciphertext`] and flips a coin (probability of 50%) to swap the ciphertexts
+/// on the pair.
 pub fn shuffle_bits(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
+    // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     for i in (0..x_cipher.len()).step_by(2) {
         // Coin flip 50/50
         if rng.gen() {
@@ -37,6 +50,7 @@ pub fn shuffle_bits(
     }
 }
 
+/// Iterates over every [`Ciphertext`] and rerandomises with the same but random [`Scalar`].
 pub fn rerandomise(
     x_cipher: &mut [Ciphertext],
     y_cipher: &mut [Ciphertext],
@@ -50,6 +64,8 @@ pub fn rerandomise(
     });
 }
 
+/// Encapsulates all the procedures of re-mixing into one function.
+/// It calls [`shuffle_pairs`], [`shuffle_bits`], [`rerandomise`] in this order.
 pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext], enc_key: &EncryptionKey) {
     let mut rng = rand::thread_rng();
     shuffle_pairs(x_cipher, y_cipher, &mut rng);

@@ -1,3 +1,5 @@
+//! Playground to test with the [`remix`] crate.
+
 use std::iter::once;
 
 use bitvec::prelude::*;
