@@ -1,6 +1,9 @@
 [workspace]
 members = [
     "remix",
-    "worldcoin",
+    "lambda",
 ]
 resolver = "2"
+
+[profile.test]
+opt-level = 1

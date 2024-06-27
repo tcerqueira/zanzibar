@@ -1,24 +1,22 @@
-//! Playground to test with the [`remix`] crate.
-
-use std::iter::once;
-
 use bitvec::prelude::*;
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
+use std::iter;
 
-const N_SIZE: usize = 12800 / 8;
+const N_BITS: usize = 12800;
 
-fn main() {
+#[test]
+fn test_mix_node() {
     let mut rng = rand::thread_rng();
 
-    let ct1 = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_SIZE]>());
-    let ct2 = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_SIZE]>());
+    let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
+    let archived_iris_code = new_iris_code.clone();
 
     // Encode bits
-    let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_SIZE * 2);
-    new_user.extend(encode_bits(&ct1[..]));
-    let mut archived_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_SIZE * 2);
-    archived_user.extend(encode_bits(&ct2[..]));
+    let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    new_user.extend(encode_bits(&new_iris_code[..]));
+    let mut archived_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    archived_user.extend(encode_bits(&archived_iris_code[..]));
 
     // Encrypt
     let dec_key = DecryptionKey::new(&mut rng);
@@ -32,7 +30,7 @@ fn main() {
     let start = std::time::Instant::now();
     remix::shuffle_pairs(&mut enc_new_user, &mut enc_archived_user, &mut rng);
     remix::shuffle_bits(&mut enc_new_user, &mut enc_archived_user, &mut rng);
-    remix::rerandomise(&mut enc_new_user, &mut enc_archived_user, enc_key, &mut rng);
+    remix::par::rerandomise(&mut enc_new_user, &mut enc_archived_user, enc_key);
     let duration = std::time::Instant::now() - start;
     println!("shuffle + rerandomize: {duration:?}");
 
@@ -41,8 +39,19 @@ fn main() {
     let dec_archived_user: BitVec<u8, Lsb0> = decrypt_bits(&enc_archived_user, &dec_key).collect();
 
     // Assert result
+    assert_eq!(dec_new_user, dec_archived_user);
     assert_eq!(new_user.count_ones(), dec_new_user.count_ones());
     assert_eq!(archived_user.count_ones(), dec_archived_user.count_ones());
+}
+
+#[test]
+fn test_encode_bits() {
+    let bits = BitVec::<u8, Msb0>::from_slice(&[0b11100100]);
+    let expected = BitVec::<u8, Msb0>::from_slice(&[0b10101001, 0b01100101]);
+
+    let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
+
+    assert_eq!(enc_bits, expected);
 }
 
 fn encode_bits<T: BitStore, O: BitOrder>(bits: &BitSlice<T, O>) -> impl Iterator<Item = bool> + '_ {
@@ -51,7 +60,7 @@ fn encode_bits<T: BitStore, O: BitOrder>(bits: &BitSlice<T, O>) -> impl Iterator
             false /*0*/ => (false, true) /*01*/,
             true  /*1*/ => (true, false) /*10*/,
         };
-        once(encoding.0).chain(once(encoding.1))
+        iter::once(encoding.0).chain(iter::once(encoding.1))
     })
 }
 
@@ -72,19 +81,4 @@ fn decrypt_bits<'a>(
         let point = pk.decrypt(*ct);
         point != (&Scalar::from(0u32) * &GENERATOR_TABLE)
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_encode_bits() {
-        let bits = BitVec::<u8, Msb0>::from_slice(&[0b11100100]);
-        let expected = BitVec::<u8, Msb0>::from_slice(&[0b10101001, 0b01100101]);
-
-        let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
-
-        assert_eq!(enc_bits, expected);
-    }
 }
