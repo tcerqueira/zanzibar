@@ -1,7 +1,37 @@
 use bitvec::prelude::*;
+use lambda::mix_node;
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
-use std::iter;
+use std::{error::Error, iter};
+
+struct TestApp {
+    port: u16,
+}
+
+async fn create_app() -> TestApp {
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    tokio::spawn(async move {
+        axum::serve(listener, mix_node::app()).await.unwrap();
+    });
+
+    TestApp { port }
+}
+
+#[tokio::test]
+async fn test_mix_node_integration() -> Result<(), Box<dyn Error>> {
+    let TestApp { port } = create_app().await;
+
+    let body = reqwest::get(format!("http://localhost:{port}"))
+        .await?
+        .text()
+        .await?;
+
+    assert_eq!(body, "{\"msg\":\"I am GET /\"}");
+
+    Ok(())
+}
 
 const N_BITS: usize = 12800;
 
