@@ -1,5 +1,5 @@
 use bitvec::prelude::*;
-use lambda::mix_node;
+use lambda::mix_node::{self, EncryptedCodes};
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::{error::Error, iter};
@@ -19,26 +19,13 @@ async fn create_app() -> TestApp {
     TestApp { port }
 }
 
-#[tokio::test]
-async fn test_mix_node_integration() -> Result<(), Box<dyn Error>> {
-    let TestApp { port } = create_app().await;
-
-    let body = reqwest::get(format!("http://localhost:{port}"))
-        .await?
-        .text()
-        .await?;
-
-    assert_eq!(body, "{\"msg\":\"I am GET /\"}");
-
-    Ok(())
-}
-
 const N_BITS: usize = 12800;
 
-#[test]
-fn test_mix_node() {
-    let mut rng = rand::thread_rng();
+#[tokio::test]
+async fn test_mix_node() -> Result<(), Box<dyn Error>> {
+    let TestApp { port } = create_app().await;
 
+    let mut rng = rand::thread_rng();
     let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
     let archived_iris_code = new_iris_code.clone();
 
@@ -52,17 +39,32 @@ fn test_mix_node() {
     let dec_key = DecryptionKey::new(&mut rng);
     let enc_key = dec_key.encryption_key();
 
-    let mut enc_new_user: Vec<_> = encrypt_bits(&new_user[..], enc_key, &mut rng).collect();
-    let mut enc_archived_user: Vec<_> =
-        encrypt_bits(&archived_user[..], enc_key, &mut rng).collect();
+    let enc_new_user: Vec<_> = encrypt_bits(&new_user[..], enc_key, &mut rng).collect();
+    let enc_archived_user: Vec<_> = encrypt_bits(&archived_user[..], enc_key, &mut rng).collect();
 
-    // Shuffle + Rerandomize
+    // Shuffle + Rerandomize + Serialization
+    let client = reqwest::Client::new();
     let start = std::time::Instant::now();
-    remix::shuffle_pairs(&mut enc_new_user, &mut enc_archived_user, &mut rng);
-    remix::shuffle_bits(&mut enc_new_user, &mut enc_archived_user, &mut rng);
-    remix::par::rerandomise(&mut enc_new_user, &mut enc_archived_user, enc_key);
+    let codes = EncryptedCodes {
+        x_code: enc_new_user,
+        y_code: enc_archived_user,
+        enc_key: Some(*enc_key),
+    };
+
+    let response = client
+        .post(format!("http://localhost:{port}/remix"))
+        .json(&codes)
+        .send()
+        .await?;
+
+    let EncryptedCodes {
+        x_code: enc_new_user,
+        y_code: enc_archived_user,
+        ..
+    } = response.json().await?;
+
     let duration = std::time::Instant::now() - start;
-    println!("shuffle + rerandomize: {duration:?}");
+    println!("shuffle + rerandomize + serialization: {duration:?}");
 
     // Decrypt
     let dec_new_user: BitVec<u8, Lsb0> = decrypt_bits(&enc_new_user, &dec_key).collect();
@@ -72,6 +74,8 @@ fn test_mix_node() {
     assert_eq!(dec_new_user, dec_archived_user);
     assert_eq!(new_user.count_ones(), dec_new_user.count_ones());
     assert_eq!(archived_user.count_ones(), dec_archived_user.count_ones());
+
+    Ok(())
 }
 
 #[test]
