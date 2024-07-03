@@ -50,6 +50,7 @@ pub mod mix_node {
     pub fn app() -> Router {
         Router::new()
             .route("/remix", post(remix_handler))
+            // TODO: for security reasons set max instead of disabling (measured payload was ~11MB)
             .layer(DefaultBodyLimit::disable())
     }
 }

@@ -854,6 +854,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bitvec",
+ "criterion",
  "lambda_http",
  "rand",
  "rayon",
@@ -861,6 +862,7 @@ dependencies = [
  "reqwest",
  "rust-elgamal",
  "serde",
+ "serde_json",
  "tokio",
 ]
 
