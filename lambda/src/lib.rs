@@ -1,13 +1,15 @@
+pub(crate) mod rokio;
+
 pub mod mix_node {
+    use super::*;
+
     use axum::extract::DefaultBodyLimit;
-    use axum::http::StatusCode;
     use axum::{response::Json, routing::post, Router};
 
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Serialize};
     use std::sync::OnceLock;
-    use tokio::task;
 
     fn enc_key() -> &'static EncryptionKey {
         // TODO: remove hardcoded encryption key from a fixed seed
@@ -26,10 +28,9 @@ pub mod mix_node {
         pub enc_key: Option<EncryptionKey>,
     }
 
-    async fn remix_handler(
-        Json(mut codes): Json<EncryptedCodes>,
-    ) -> Result<Json<EncryptedCodes>, StatusCode> {
-        codes = task::spawn_blocking(move || {
+    async fn remix_handler(Json(mut codes): Json<EncryptedCodes>) -> Json<EncryptedCodes> {
+        // TODO: error handling for vecs of different sizes
+        let codes = rokio::spawn(move || {
             let mut rng = rand::thread_rng();
             remix::shuffle_pairs(&mut codes.x_code, &mut codes.y_code, &mut rng);
             remix::shuffle_pairs(&mut codes.x_code, &mut codes.y_code, &mut rng);
@@ -38,12 +39,12 @@ pub mod mix_node {
                 &mut codes.y_code,
                 &codes.enc_key.unwrap_or(*enc_key()),
             );
+
             codes
         })
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .await;
 
-        Ok(Json(codes))
+        Json(codes)
     }
 
     pub fn app() -> Router {

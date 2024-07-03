@@ -856,6 +856,7 @@ dependencies = [
  "bitvec",
  "lambda_http",
  "rand",
+ "rayon",
  "remix",
  "reqwest",
  "rust-elgamal",

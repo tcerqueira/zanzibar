@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "0.8.5"
-rayon = "1.10.0"
-rust-elgamal = "0.4.0"
+rand = "0.8"
+rayon = "1"
+rust-elgamal = "0.4"
 
 [dev-dependencies]
-rstest = "0.21.0"
+rstest = "0.21"
 criterion = "0.5"
 
 [[bench]]
