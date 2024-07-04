@@ -57,6 +57,10 @@ async fn test_mix_node() -> Result<(), Box<dyn Error>> {
     let dec_archived_user: BitVec<u8, Lsb0> = decrypt_bits(&enc_archived_user, &dec_key).collect();
 
     // Assert result
+    let hamming_distance = iter::zip(dec_new_user.iter(), dec_archived_user.iter())
+        .filter(|(x, y)| x != y)
+        .count();
+    assert_eq!(hamming_distance, 0);
     assert_eq!(dec_new_user, dec_archived_user);
     assert_eq!(new_user.count_ones(), dec_new_user.count_ones());
     assert_eq!(archived_user.count_ones(), dec_archived_user.count_ones());
@@ -72,6 +76,15 @@ fn test_encode_bits() {
     let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
 
     assert_eq!(enc_bits, expected);
+}
+
+#[test]
+fn test_decode_bits() {
+    let bits = BitVec::<u8, Msb0>::from_slice(&[0b11100100]);
+    let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
+
+    let dec_bits: BitVec<u8, Msb0> = decode_bits(&enc_bits[..]).collect();
+    assert_eq!(bits, dec_bits);
 }
 
 fn encode_bits<T: BitStore, O: BitOrder>(bits: &BitSlice<T, O>) -> impl Iterator<Item = bool> + '_ {
@@ -100,5 +113,16 @@ fn decrypt_bits<'a>(
     ct.iter().map(|ct| {
         let point = pk.decrypt(*ct);
         point != (&Scalar::from(0u32) * &GENERATOR_TABLE)
+    })
+}
+
+fn decode_bits<T: BitStore, O: BitOrder>(bits: &BitSlice<T, O>) -> impl Iterator<Item = bool> + '_ {
+    bits.chunks_exact(2).map(|bit_pair| {
+        let bit_pair = (bit_pair[0], bit_pair[1]);
+        match bit_pair {
+            (false, true)   /*01*/ => false /*0*/,
+            (true, false)   /*10*/ => true  /*1*/,
+            other => panic!("invalid encoding of bit: {other:?}")
+        }
     })
 }
