@@ -23,6 +23,7 @@ remix = { path = "../remix" }
 rust-elgamal = { version = "0.4", features = ["enable-serde"] }
 rand = "0.8"
 rayon = "1"
+mimalloc = "0.1"
 
 [dev-dependencies]
 bitvec = "1.0"

@@ -5,6 +5,11 @@ use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::{error::Error, iter};
 
+use mimalloc::MiMalloc as GlobalAllocator;
+
+#[global_allocator]
+static GLOBAL: GlobalAllocator = GlobalAllocator;
+
 const N_BITS: usize = 12800;
 
 #[tokio::test]

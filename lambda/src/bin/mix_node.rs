@@ -1,5 +1,10 @@
 use lambda::mix_node;
 
+use mimalloc::MiMalloc as GlobalAllocator;
+
+#[global_allocator]
+static GLOBAL: GlobalAllocator = GlobalAllocator;
+
 #[tokio::main]
 async fn main() -> Result<(), lambda_http::Error> {
     // If you use API Gateway stages, the Rust Runtime will include the stage name

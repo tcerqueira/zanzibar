@@ -4,6 +4,11 @@ use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 
+use mimalloc::MiMalloc as GlobalAllocator;
+
+#[global_allocator]
+static GLOBAL: GlobalAllocator = GlobalAllocator;
+
 const N_BITS: usize = 25600;
 
 fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
