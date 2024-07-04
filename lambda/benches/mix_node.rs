@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use lambda::mix_node::EncryptedCodes;
+use lambda::{mix_node::EncryptedCodes, testing};
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
+use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 
 const N_BITS: usize = 25600;
@@ -65,9 +66,50 @@ fn bench_deserialization_json(c: &mut Criterion) {
     });
 }
 
+fn bench_requests(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Request");
+
+    let (ct1, ct2, mut rng) = setup_bench();
+    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let test_app = rt.block_on(async { testing::create_app().await });
+    let client = reqwest::Client::new();
+
+    let payload = EncryptedCodes {
+        x_code: ct1,
+        y_code: ct2,
+        enc_key: Some(enc_key),
+    };
+
+    async fn bench_fn(
+        client: &Client,
+        port: u16,
+        payload: &EncryptedCodes,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let _response: EncryptedCodes = client
+            .post(format!("http://localhost:{port}/remix"))
+            .json(&payload)
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(())
+    }
+
+    group.bench_function("send and receive", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(&client, test_app.port, &payload))
+    });
+
+    test_app.join_handle.abort();
+}
+
 criterion_group!(
     mix_node_benches,
     bench_serialization_json,
-    bench_deserialization_json
+    bench_deserialization_json,
+    bench_requests,
 );
 criterion_main!(mix_node_benches);

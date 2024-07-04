@@ -1,29 +1,15 @@
 use bitvec::prelude::*;
-use lambda::mix_node::{self, EncryptedCodes};
+use lambda::mix_node::EncryptedCodes;
+use lambda::testing::{self, TestApp};
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::{error::Error, iter};
-
-struct TestApp {
-    port: u16,
-}
-
-async fn create_app() -> TestApp {
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    tokio::spawn(async move {
-        axum::serve(listener, mix_node::app()).await.unwrap();
-    });
-
-    TestApp { port }
-}
 
 const N_BITS: usize = 12800;
 
 #[tokio::test]
 async fn test_mix_node() -> Result<(), Box<dyn Error>> {
-    let TestApp { port } = create_app().await;
+    let TestApp { port, .. } = testing::create_app().await;
 
     let mut rng = rand::thread_rng();
     let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());

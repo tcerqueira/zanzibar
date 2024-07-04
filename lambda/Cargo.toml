@@ -16,7 +16,7 @@ edition = "2021"
 
 [dependencies]
 lambda_http = "0.12"
-tokio = { version = "1", features = ["macros"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.7", features = ["macros"] }
 serde = { version = "1", features = ["derive"] }
 remix = { path = "../remix" }
@@ -28,7 +28,7 @@ rayon = "1"
 bitvec = "1.0"
 rand = { version = "0.8", features = ["min_const_gen"] }
 reqwest = { version = "0.12", features = ["json"] }
-criterion = "0.5"
+criterion = { version = "0.5", features = ["async_tokio"] }
 serde_json = "1"
 
 [[bench]]
