@@ -10,7 +10,7 @@ use mimalloc::MiMalloc as GlobalAllocator;
 #[global_allocator]
 static GLOBAL: GlobalAllocator = GlobalAllocator;
 
-const N_BITS: usize = 12800;
+const N_BITS: usize = lambda::N_BITS / 2;
 
 #[tokio::test]
 async fn test_mix_node() -> Result<(), Box<dyn Error>> {

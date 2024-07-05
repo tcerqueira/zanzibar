@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use lambda::{mix_node::EncryptedCodes, testing};
+use lambda::{mix_node::EncryptedCodes, testing, N_BITS};
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
@@ -8,8 +8,6 @@ use mimalloc::MiMalloc as GlobalAllocator;
 
 #[global_allocator]
 static GLOBAL: GlobalAllocator = GlobalAllocator;
-
-const N_BITS: usize = 25600;
 
 fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
     let mut rng = StdRng::seed_from_u64(7);
