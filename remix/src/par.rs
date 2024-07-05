@@ -20,6 +20,7 @@ pub fn rerandomise(
 
 /// Same as [remix](fn@super::remix) but uses parallel [`rerandomise`].
 pub fn remix(x_cipher: &mut [Ciphertext], y_cipher: &mut [Ciphertext], enc_key: &EncryptionKey) {
+    assert_eq!(x_cipher.len(), y_cipher.len());
     let mut rng = rand::thread_rng();
     super::shuffle_pairs(x_cipher, y_cipher, &mut rng);
     super::shuffle_bits(x_cipher, y_cipher, &mut rng);

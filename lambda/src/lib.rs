@@ -9,6 +9,7 @@ pub mod mix_node {
     use axum::extract::DefaultBodyLimit;
     use axum::{response::Json, routing::post, Router};
 
+    use axum::http::StatusCode;
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Deserializer, Serialize};
@@ -30,23 +31,24 @@ pub mod mix_node {
         pub enc_key: Option<EncryptionKey>,
     }
 
-    async fn remix_handler(Json(mut codes): Json<EncryptedCodes>) -> Json<EncryptedCodes> {
-        // TODO: error handling for vecs of different sizes
+    async fn remix_handler(
+        Json(mut codes): Json<EncryptedCodes>,
+    ) -> Result<Json<EncryptedCodes>, StatusCode> {
+        if codes.x_code.len() != codes.y_code.len() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
         let codes = rokio::spawn(move || {
-            let mut rng = rand::thread_rng();
-            remix::shuffle_pairs(&mut codes.x_code, &mut codes.y_code, &mut rng);
-            remix::shuffle_pairs(&mut codes.x_code, &mut codes.y_code, &mut rng);
-            remix::par::rerandomise(
+            remix::par::remix(
                 &mut codes.x_code,
                 &mut codes.y_code,
                 &codes.enc_key.unwrap_or(*enc_key()),
             );
-
             codes
         })
         .await;
 
-        Json(codes)
+        Ok(Json(codes))
     }
 
     fn enc_key() -> &'static EncryptionKey {

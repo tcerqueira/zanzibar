@@ -19,6 +19,7 @@ pub fn shuffle_pairs(
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
+    assert_eq!(x_cipher.len(), y_cipher.len());
     // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     const STEP: usize = 2;
     let total_pairs = x_cipher.len() / STEP;
@@ -40,6 +41,7 @@ pub fn shuffle_bits(
     y_cipher: &mut [Ciphertext],
     rng: &mut (impl Rng + CryptoRng),
 ) {
+    assert_eq!(x_cipher.len(), y_cipher.len());
     // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     for i in (0..x_cipher.len()).step_by(2) {
         // Coin flip 50/50
