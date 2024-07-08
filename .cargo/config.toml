@@ -1,2 +1,7 @@
 [build]
 rustflags = ["-Ctarget-cpu=native"]
+
+[alias]
+# E.g. CARGO_PROFILE_BENCH_DEBUG=true cargo profile-bench mix_node
+profile-bench = "flamegraph --root --bench"
+profile-test = "flamegraph --root --test"
