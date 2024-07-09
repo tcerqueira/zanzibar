@@ -6,20 +6,38 @@ pub const N_BITS: usize = 25600;
 pub mod mix_node {
     use super::*;
 
-    use axum::extract::DefaultBodyLimit;
+    use axum::extract::{DefaultBodyLimit, Request, State};
+    use axum::middleware::{self, Next};
+    use axum::response::{IntoResponse, Response};
     use axum::{response::Json, routing::post, Router};
 
-    use axum::http::StatusCode;
+    use axum::http::{HeaderMap, StatusCode};
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Deserializer, Serialize};
     use std::sync::OnceLock;
 
-    pub fn app() -> Router {
+    #[derive(Debug, Clone)]
+    pub struct AppState {
+        auth_token: Option<String>,
+    }
+
+    impl AppState {
+        pub fn new(auth_token: Option<String>) -> Self {
+            Self { auth_token }
+        }
+    }
+
+    pub fn app(state: AppState) -> Router {
         Router::new()
             .route("/remix", post(remix_handler))
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            ))
             // TODO: for security reasons set max instead of disabling (measured payload was ~11MB)
             .layer(DefaultBodyLimit::disable())
+            .with_state(state)
     }
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -49,6 +67,25 @@ pub mod mix_node {
         .await;
 
         Ok(Json(codes))
+    }
+
+    async fn auth_middleware(
+        State(AppState { auth_token }): State<AppState>,
+        headers: HeaderMap,
+        request: Request,
+        next: Next,
+    ) -> Response {
+        let next_run = async { next.run(request).await };
+
+        match (auth_token, headers.get("X-AUTH-TOKEN")) {
+            // AUTH_TOKEN is set on the server and in the request header so we check
+            (Some(auth_token), Some(header_auth_token)) if auth_token == *header_auth_token => {
+                next_run.await
+            }
+            // AUTH_TOKEN is not set on the server so we disable auth
+            (None, _) => next_run.await,
+            _ => StatusCode::UNAUTHORIZED.into_response(),
+        }
     }
 
     fn enc_key() -> &'static EncryptionKey {

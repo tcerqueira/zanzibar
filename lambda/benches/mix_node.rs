@@ -78,7 +78,7 @@ fn bench_requests(c: &mut Criterion) {
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(async { testing::create_app().await });
+    let test_app = rt.block_on(async { testing::create_app(None).await });
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(EncryptedCodes {

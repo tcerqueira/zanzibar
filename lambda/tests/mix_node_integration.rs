@@ -43,7 +43,7 @@ fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
 
 #[tokio::test]
 async fn test_mix_node() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app().await;
+    let TestApp { port, .. } = testing::create_app(None).await;
 
     let (codes, dec_key) = set_up_payload();
 
@@ -78,7 +78,7 @@ async fn test_mix_node() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app().await;
+    let TestApp { port, .. } = testing::create_app(None).await;
 
     let (mut codes, _dec_key) = set_up_payload();
     // Remove elements to cause a size mismatch
@@ -95,6 +95,44 @@ async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
 
     // Assert
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
+    let TestApp { port, .. } =
+        testing::create_app(Some("test_mix_node_unauthorized".to_string())).await;
+
+    // Bad request + Serialization
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("http://localhost:{port}/remix"))
+        .send()
+        .await?;
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_mix_node_authorized() -> Result<(), Box<dyn Error>> {
+    let auth_token = "test_mix_node_authorized";
+    let TestApp { port, .. } = testing::create_app(Some(auth_token.to_string())).await;
+
+    let (codes, _dec_key) = set_up_payload();
+
+    // Bad request + Serialization
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("http://localhost:{port}/remix"))
+        .header("X-AUTH-TOKEN", auth_token)
+        .json(&codes)
+        .send()
+        .await?;
+
+    // Assert
+    assert_eq!(response.status(), StatusCode::OK);
     Ok(())
 }
 
