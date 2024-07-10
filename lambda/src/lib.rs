@@ -38,8 +38,7 @@ pub mod mix_node {
                 state.clone(),
                 auth_middleware,
             ))
-            // TODO: for security reasons set max instead of disabling (measured payload was ~11MB)
-            .layer(DefaultBodyLimit::disable())
+            .layer(DefaultBodyLimit::max(12_000_000 /* 12MB */))
             .with_state(state)
     }
 
