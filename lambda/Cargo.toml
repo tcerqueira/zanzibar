@@ -18,6 +18,7 @@ edition = "2021"
 lambda_http = "0.12"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.7", features = ["macros"] }
+axum-extra = { version = "0.9",  features = ["typed-header"] }
 serde = { version = "1", features = ["derive"] }
 remix = { path = "../remix" }
 rust-elgamal = { version = "0.4", features = ["enable-serde"] }

@@ -126,7 +126,7 @@ async fn test_mix_node_authorized() -> Result<(), Box<dyn Error>> {
     let client = reqwest::Client::new();
     let response = client
         .post(format!("http://localhost:{port}/remix"))
-        .header("X-AUTH-TOKEN", auth_token)
+        .header("Authorization", "Bearer ".to_string() + auth_token)
         .json(&codes)
         .send()
         .await?;

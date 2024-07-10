@@ -11,7 +11,10 @@ pub mod mix_node {
     use axum::response::{IntoResponse, Response};
     use axum::{response::Json, routing::post, Router};
 
-    use axum::http::{HeaderMap, StatusCode};
+    use axum::http::StatusCode;
+    use axum_extra::headers::authorization::Bearer;
+    use axum_extra::headers::Authorization;
+    use axum_extra::TypedHeader;
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Deserializer, Serialize};
@@ -71,15 +74,17 @@ pub mod mix_node {
 
     async fn auth_middleware(
         State(AppState { auth_token }): State<AppState>,
-        headers: HeaderMap,
+        auth_header: Option<TypedHeader<Authorization<Bearer>>>,
         request: Request,
         next: Next,
     ) -> Response {
         let next_run = async { next.run(request).await };
 
-        match (auth_token, headers.get("X-AUTH-TOKEN")) {
+        match (auth_token, auth_header) {
             // AUTH_TOKEN is set on the server and in the request header so we check
-            (Some(auth_token), Some(header_auth_token)) if auth_token == *header_auth_token => {
+            (Some(auth_token), Some(TypedHeader(header_auth_token)))
+                if auth_token == header_auth_token.token() =>
+            {
                 next_run.await
             }
             // AUTH_TOKEN is not set on the server so we disable auth
