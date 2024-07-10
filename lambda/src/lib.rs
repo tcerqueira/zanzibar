@@ -10,7 +10,6 @@ pub mod mix_node {
     use axum::middleware::{self, Next};
     use axum::response::{IntoResponse, Response};
     use axum::{response::Json, routing::post, Router};
-
     use axum::http::StatusCode;
     use axum_extra::headers::authorization::Bearer;
     use axum_extra::headers::Authorization;
@@ -18,6 +17,7 @@ pub mod mix_node {
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Deserializer, Serialize};
+    use tower_http::trace::TraceLayer;
     use std::sync::OnceLock;
 
     #[derive(Debug, Clone)]
@@ -39,6 +39,7 @@ pub mod mix_node {
                 auth_middleware,
             ))
             .layer(DefaultBodyLimit::max(12_000_000 /* 12MB */))
+            .layer(TraceLayer::new_for_http())
             .with_state(state)
     }
 
@@ -51,10 +52,19 @@ pub mod mix_node {
         pub enc_key: Option<EncryptionKey>,
     }
 
+    #[tracing::instrument(
+        skip(codes),
+        fields(
+            x_code.len = codes.x_code.len(), 
+            y_code.len = codes.y_code.len(),
+            enc_key = ?codes.enc_key,
+        )
+    )]
     async fn remix_handler(
         Json(mut codes): Json<EncryptedCodes>,
     ) -> Result<Json<EncryptedCodes>, StatusCode> {
         if codes.x_code.len() != codes.y_code.len() {
+            tracing::error!("length mismatch between codes");
             return Err(StatusCode::BAD_REQUEST);
         }
 
@@ -71,6 +81,7 @@ pub mod mix_node {
         Ok(Json(codes))
     }
 
+    #[tracing::instrument(skip_all)]
     async fn auth_middleware(
         State(AppState { auth_token }): State<AppState>,
         auth_header: Option<TypedHeader<Authorization<Bearer>>>,

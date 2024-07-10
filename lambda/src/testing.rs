@@ -1,4 +1,6 @@
+use std::sync::OnceLock;
 use tokio::task::JoinHandle;
+use tracing::level_filters::LevelFilter;
 
 use crate::mix_node::{self, AppState};
 
@@ -8,6 +10,8 @@ pub struct TestApp {
 }
 
 pub async fn create_app(auth_token: Option<String>) -> TestApp {
+    // Only for debugging purposes
+    // init_tracing();
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
@@ -17,4 +21,14 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
     });
 
     TestApp { port, join_handle }
+}
+
+#[allow(dead_code)]
+fn init_tracing() {
+    static TRACING: OnceLock<()> = OnceLock::new();
+    TRACING.get_or_init(|| {
+        tracing_subscriber::fmt()
+            .with_max_level(LevelFilter::TRACE)
+            .init();
+    });
 }
