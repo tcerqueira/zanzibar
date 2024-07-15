@@ -7,27 +7,29 @@ pub mod mix_node {
     use super::*;
 
     use axum::extract::{DefaultBodyLimit, Request, State};
+    use axum::http::StatusCode;
     use axum::middleware::{self, Next};
     use axum::response::{IntoResponse, Response};
     use axum::{response::Json, routing::post, Router};
-    use axum::http::StatusCode;
     use axum_extra::headers::authorization::Bearer;
     use axum_extra::headers::Authorization;
     use axum_extra::TypedHeader;
     use rand::{rngs::StdRng, SeedableRng};
     use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
     use serde::{Deserialize, Deserializer, Serialize};
-    use tower_http::trace::TraceLayer;
     use std::sync::OnceLock;
+    use tower_http::trace::TraceLayer;
 
     #[derive(Debug, Clone)]
     pub struct AppState {
-        auth_token: Option<String>,
+        auth_token: Option<&'static str>,
     }
 
     impl AppState {
         pub fn new(auth_token: Option<String>) -> Self {
-            Self { auth_token }
+            Self {
+                auth_token: auth_token.map(|s| s.leak() as &'_ str),
+            }
         }
     }
 
@@ -55,7 +57,7 @@ pub mod mix_node {
     #[tracing::instrument(
         skip(codes),
         fields(
-            x_code.len = codes.x_code.len(), 
+            x_code.len = codes.x_code.len(),
             y_code.len = codes.y_code.len(),
             enc_key = ?codes.enc_key,
         )
@@ -93,7 +95,7 @@ pub mod mix_node {
         match (auth_token, auth_header) {
             // AUTH_TOKEN is set on the server and in the request header so we check
             (Some(auth_token), Some(TypedHeader(header_auth_token)))
-                if auth_token == header_auth_token.token() =>
+                if *auth_token == *header_auth_token.token() =>
             {
                 next_run.await
             }
