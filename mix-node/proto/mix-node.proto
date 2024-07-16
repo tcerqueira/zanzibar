@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package mix_node;
+
+service MixNode {
+    rpc Remix(EncryptedCodes) returns (EncryptedCodes);
+}
+
+message EncryptedCodes {
+    repeated bytes x_code = 1;
+    repeated bytes y_code = 2;
+    bytes enc_key = 3;
+}
