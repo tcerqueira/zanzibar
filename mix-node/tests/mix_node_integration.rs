@@ -1,6 +1,6 @@
 use bitvec::prelude::*;
-use lambda::mix_node::EncryptedCodes;
-use lambda::testing::{self, TestApp};
+use mix_node::routes::EncryptedCodes;
+use mix_node::testing::{self, TestApp};
 use rand::{CryptoRng, Rng};
 use reqwest::StatusCode;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
@@ -11,7 +11,7 @@ use mimalloc::MiMalloc as GlobalAllocator;
 #[global_allocator]
 static GLOBAL: GlobalAllocator = GlobalAllocator;
 
-const N_BITS: usize = lambda::N_BITS / 2;
+const N_BITS: usize = mix_node::N_BITS / 2;
 
 fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
     let mut rng = rand::thread_rng();

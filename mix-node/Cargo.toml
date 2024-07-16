@@ -1,13 +1,13 @@
 [package]
-name = "lambda"
+name = "mix-node"
 version = "0.1.0"
 edition = "2021"
 
-# Starting in Rust 1.62 you can use `cargo add` to add dependencies 
+# Starting in Rust 1.62 you can use `cargo add` to add dependencies
 # to your project.
 #
 # If you're using an older Rust version,
-# download cargo-edit(https://github.com/killercup/cargo-edit#installation) 
+# download cargo-edit(https://github.com/killercup/cargo-edit#installation)
 # to install the `add` subcommand.
 #
 # Running `cargo add DEPENDENCY_NAME` will
@@ -18,7 +18,7 @@ edition = "2021"
 lambda_http = "0.12"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
 axum = { version = "0.7", features = ["macros", "tracing"] }
-axum-extra = { version = "0.9",  features = ["typed-header"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
 serde = { version = "1", features = ["derive"] }
 remix = { path = "../remix" }
 rust-elgamal = { version = "0.4", features = ["enable-serde"] }
@@ -28,6 +28,7 @@ mimalloc = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 tower-http = { version = "0.5", features = ["trace"] }
+# secrecy = { version = "0.8" }
 
 [dev-dependencies]
 bitvec = "1.0"
@@ -42,4 +43,4 @@ harness = false
 
 [[bin]]
 name = "mix-node"
-path = "src/bin/mix_node.rs"
+path = "src/bin/lambda.rs"

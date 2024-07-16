@@ -1,4 +1,4 @@
-use lambda::mix_node::{self, AppState};
+use mix_node::AppState;
 
 use mimalloc::MiMalloc as GlobalAllocator;
 

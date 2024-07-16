@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use lambda::{mix_node::EncryptedCodes, testing, N_BITS};
+use mix_node::{routes::EncryptedCodes, testing, N_BITS};
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
