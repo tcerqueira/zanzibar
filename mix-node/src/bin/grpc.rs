@@ -28,7 +28,7 @@ impl MixNode for MixNodeService {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
-    let echo = MixNodeService::default();
+    let echo = MixNodeService;
 
     Server::builder()
         .add_service(MixNodeServer::new(echo))
