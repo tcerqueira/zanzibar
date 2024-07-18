@@ -1,4 +1,5 @@
 mod auth;
+pub mod grpc;
 pub(crate) mod rokio;
 pub mod routes;
 pub mod testing;

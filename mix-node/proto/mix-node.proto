@@ -6,8 +6,13 @@ service MixNode {
     rpc Remix(EncryptedCodes) returns (EncryptedCodes);
 }
 
+message Ciphertext {
+    bytes e = 1;
+    bytes c = 2;
+}
+
 message EncryptedCodes {
-    repeated bytes x_code = 1;
-    repeated bytes y_code = 2;
-    bytes enc_key = 3;
+    repeated Ciphertext x_code = 1;
+    repeated Ciphertext y_code = 2;
+    optional bytes enc_key = 3;
 }

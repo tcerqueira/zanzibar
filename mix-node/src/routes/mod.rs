@@ -23,10 +23,10 @@ pub struct EncryptedCodes {
     )]
 pub async fn remix_handler(
     Json(mut codes): Json<EncryptedCodes>,
-) -> Result<Json<EncryptedCodes>, StatusCode> {
+) -> Result<Json<EncryptedCodes>, (StatusCode, &'static str)> {
     if codes.x_code.len() != codes.y_code.len() {
         tracing::error!("length mismatch between codes");
-        return Err(StatusCode::BAD_REQUEST);
+        return Err((StatusCode::BAD_REQUEST, "Codes have mismatched lengths."));
     }
 
     let codes = rokio::spawn(move || {
