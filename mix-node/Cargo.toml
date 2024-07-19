@@ -3,17 +3,6 @@ name = "mix-node"
 version = "0.1.0"
 edition = "2021"
 
-# Starting in Rust 1.62 you can use `cargo add` to add dependencies
-# to your project.
-#
-# If you're using an older Rust version,
-# download cargo-edit(https://github.com/killercup/cargo-edit#installation)
-# to install the `add` subcommand.
-#
-# Running `cargo add DEPENDENCY_NAME` will
-# add the latest version of a dependency to the list,
-# and it will keep the alphabetic ordering for you.
-
 [dependencies]
 # Web
 lambda_http = "0.12"
@@ -24,6 +13,7 @@ tower-http = { version = "0.5", features = ["trace"] }
 # gRPC
 tonic = { version = "0.12" }
 prost = "0.13"
+tokio-stream = "0.1"
 # Common
 serde = { version = "1", features = ["derive"] }
 remix = { path = "../remix" }
@@ -33,6 +23,7 @@ rayon = "1"
 mimalloc = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+thiserror = "1"
 
 [build-dependencies]
 tonic-build = "0.12"

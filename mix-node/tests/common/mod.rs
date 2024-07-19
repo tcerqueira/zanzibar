@@ -1,7 +1,39 @@
 use bitvec::prelude::*;
-use rand::{CryptoRng, Rng};
+use mix_node::routes::EncryptedCodes;
+use rand::CryptoRng;
+use rand::Rng;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::iter;
+
+pub const N_BITS: usize = mix_node::N_BITS / 2;
+
+pub fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
+    let mut rng = rand::thread_rng();
+    let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
+    let archived_iris_code = new_iris_code.clone();
+
+    // Encode bits
+    let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    new_user.extend(encode_bits(&new_iris_code[..]));
+    let mut archived_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    archived_user.extend(encode_bits(&archived_iris_code[..]));
+
+    // Encrypt
+    let dec_key = DecryptionKey::new(&mut rng);
+    let enc_key = dec_key.encryption_key();
+
+    let enc_new_user: Vec<_> = encrypt_bits(&new_user[..], enc_key, &mut rng).collect();
+    let enc_archived_user: Vec<_> = encrypt_bits(&archived_user[..], enc_key, &mut rng).collect();
+
+    (
+        EncryptedCodes {
+            x_code: enc_new_user,
+            y_code: enc_archived_user,
+            enc_key: Some(*enc_key),
+        },
+        dec_key,
+    )
+}
 
 pub fn encode_bits<T: BitStore, O: BitOrder>(
     bits: &BitSlice<T, O>,

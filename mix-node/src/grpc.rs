@@ -1,25 +1,24 @@
 use crate::rokio;
+use crate::routes::EncryptedCodes;
 use proto::mix_node_server::{MixNode, MixNodeServer};
 use rust_elgamal::{Ciphertext, CompressedRistretto, EncryptionKey};
+use thiserror::Error;
 use tonic::transport::Server;
 use tonic::Status;
 use tonic::{transport::server::Router, Request, Response};
 
-mod proto {
+pub mod proto {
     tonic::include_proto!("mix_node");
 }
 
-#[derive(Debug)]
-pub struct EncryptedCodes {
-    pub x_code: Vec<Ciphertext>,
-    pub y_code: Vec<Ciphertext>,
-    pub enc_key: Option<EncryptionKey>,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum MessageError {
+    #[error("Found invalid ciphertext.")]
     InvalidCiphertext,
+    #[error("Found invalid encryption key.")]
     InvalidEncryptionKey,
+    #[error("Codes have mismatched lengths. x:{x_len} =/= y:{y_len}")]
+    LengthMismatch { x_len: usize, y_len: usize },
 }
 
 #[derive(Debug, Default)]
@@ -35,7 +34,10 @@ impl MixNode for MixNodeService {
 
         if codes.x_code.len() != codes.y_code.len() {
             tracing::error!("length mismatch between codes");
-            return Err(Status::invalid_argument("Codes have mismatched lengths."));
+            Err(MessageError::LengthMismatch {
+                x_len: codes.x_code.len(),
+                y_len: codes.y_code.len(),
+            })?;
         }
 
         let codes = rokio::spawn(move || {
@@ -53,10 +55,9 @@ impl MixNode for MixNodeService {
 }
 
 pub fn service() -> Router {
-    // TODO: add tests
+    // TODO: add bench
     // TODO: add tracing
     // TODO: add auth
-    // TODO: add bench
     let mix_node = MixNodeService;
     Server::builder().add_service(MixNodeServer::new(mix_node))
 }
@@ -64,11 +65,10 @@ pub fn service() -> Router {
 impl From<MessageError> for Status {
     fn from(error: MessageError) -> Self {
         match error {
-            MessageError::InvalidCiphertext => {
-                Status::invalid_argument("Found invalid ciphertext.")
-            }
-            MessageError::InvalidEncryptionKey => {
-                Status::invalid_argument("Found invalid encryption key.")
+            MessageError::InvalidCiphertext
+            | MessageError::InvalidEncryptionKey
+            | MessageError::LengthMismatch { x_len: _, y_len: _ } => {
+                Status::invalid_argument(error.to_string())
             }
         }
     }

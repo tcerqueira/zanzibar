@@ -3,9 +3,7 @@ mod common;
 use bitvec::prelude::*;
 use mix_node::routes::EncryptedCodes;
 use mix_node::testing::{self, TestApp};
-use rand::Rng;
 use reqwest::StatusCode;
-use rust_elgamal::DecryptionKey;
 use std::{error::Error, iter};
 
 use mimalloc::MiMalloc as GlobalAllocator;
@@ -13,42 +11,13 @@ use mimalloc::MiMalloc as GlobalAllocator;
 #[global_allocator]
 static GLOBAL: GlobalAllocator = GlobalAllocator;
 
-const N_BITS: usize = mix_node::N_BITS / 2;
-
-fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
-    let mut rng = rand::thread_rng();
-    let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
-    let archived_iris_code = new_iris_code.clone();
-
-    // Encode bits
-    let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
-    new_user.extend(common::encode_bits(&new_iris_code[..]));
-    let mut archived_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
-    archived_user.extend(common::encode_bits(&archived_iris_code[..]));
-
-    // Encrypt
-    let dec_key = DecryptionKey::new(&mut rng);
-    let enc_key = dec_key.encryption_key();
-
-    let enc_new_user: Vec<_> = common::encrypt_bits(&new_user[..], enc_key, &mut rng).collect();
-    let enc_archived_user: Vec<_> =
-        common::encrypt_bits(&archived_user[..], enc_key, &mut rng).collect();
-
-    (
-        EncryptedCodes {
-            x_code: enc_new_user,
-            y_code: enc_archived_user,
-            enc_key: Some(*enc_key),
-        },
-        dec_key,
-    )
-}
+const N_BITS: usize = common::N_BITS;
 
 #[tokio::test]
 async fn test_mix_node() -> Result<(), Box<dyn Error>> {
     let TestApp { port, .. } = testing::create_app(None).await;
 
-    let (codes, dec_key) = set_up_payload();
+    let (codes, dec_key) = common::set_up_payload();
 
     // Shuffle + Rerandomize + Serialization
     let client = reqwest::Client::new();
@@ -84,7 +53,7 @@ async fn test_mix_node() -> Result<(), Box<dyn Error>> {
 async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
     let TestApp { port, .. } = testing::create_app(None).await;
 
-    let (mut codes, _dec_key) = set_up_payload();
+    let (mut codes, _dec_key) = common::set_up_payload();
     // Remove elements to cause a size mismatch
     codes.x_code.pop();
     codes.x_code.pop();
@@ -124,7 +93,7 @@ async fn test_mix_node_authorized() -> Result<(), Box<dyn Error>> {
     let auth_token = "test_mix_node_authorized";
     let TestApp { port, .. } = testing::create_app(Some(auth_token.to_string())).await;
 
-    let (codes, _dec_key) = set_up_payload();
+    let (codes, _dec_key) = common::set_up_payload();
 
     // Bad request + Serialization
     let client = reqwest::Client::new();
