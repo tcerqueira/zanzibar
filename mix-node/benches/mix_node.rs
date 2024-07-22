@@ -1,9 +1,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use mix_node::{routes::EncryptedCodes, testing, N_BITS};
+use mix_node::{
+    grpc::proto::{self, mix_node_client::MixNodeClient},
+    routes::EncryptedCodes,
+    testing, N_BITS,
+};
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::sync::Arc;
+use tonic::transport::Channel;
 
 use mimalloc::MiMalloc as GlobalAllocator;
 
@@ -72,6 +77,7 @@ fn bench_deserialization_json(c: &mut Criterion) {
 
 fn bench_requests(c: &mut Criterion) {
     let mut group = c.benchmark_group("Request");
+    group.sample_size(20);
 
     let (ct1, ct2, mut rng) = setup_bench();
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
@@ -131,10 +137,77 @@ fn bench_requests(c: &mut Criterion) {
     test_app.join_handle.abort();
 }
 
+fn bench_grpc_requests(c: &mut Criterion) {
+    let mut group = c.benchmark_group("gRPC request");
+    group.sample_size(20);
+
+    let (ct1, ct2, mut rng) = setup_bench();
+    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let test_app = rt.block_on(testing::create_grpc());
+    let client = rt
+        .block_on(MixNodeClient::connect(format!(
+            "http://localhost:{}",
+            test_app.port
+        )))
+        .unwrap();
+    let client = Arc::new(client);
+
+    let payload = Arc::new(EncryptedCodes {
+        x_code: ct1,
+        y_code: ct2,
+        enc_key: Some(enc_key),
+    });
+
+    async fn bench_fn(
+        client: Arc<MixNodeClient<Channel>>,
+        concurrent_req: u16,
+        payload: Arc<EncryptedCodes>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut join_handles = Vec::with_capacity(concurrent_req as usize);
+        for _ in 0..concurrent_req {
+            let mut client = (*client).clone();
+            let payload = Arc::clone(&payload);
+            let handle = tokio::spawn(async move {
+                let proto_codes: proto::EncryptedCodes = (&*payload).into();
+                let _response: EncryptedCodes = client
+                    .remix(proto_codes)
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .try_into()
+                    .unwrap();
+            });
+
+            join_handles.push(handle);
+        }
+
+        for handle in join_handles {
+            let _ = handle.await;
+        }
+
+        Ok(())
+    }
+
+    group.bench_function("one request", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
+    });
+
+    group.bench_function("6 parallel", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 6, Arc::clone(&payload)))
+    });
+
+    test_app.join_handle.abort();
+}
+
 criterion_group!(
     mix_node_benches,
     bench_serialization_json,
     bench_deserialization_json,
     bench_requests,
+    bench_grpc_requests,
 );
 criterion_main!(mix_node_benches);

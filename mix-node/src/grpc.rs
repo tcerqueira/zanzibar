@@ -74,10 +74,10 @@ impl From<MessageError> for Status {
     }
 }
 
-impl TryFrom<proto::Ciphertext> for Ciphertext {
+impl TryFrom<&proto::Ciphertext> for Ciphertext {
     type Error = MessageError;
 
-    fn try_from(proto: proto::Ciphertext) -> Result<Self, Self::Error> {
+    fn try_from(proto: &proto::Ciphertext) -> Result<Self, Self::Error> {
         Ok(Ciphertext::from((
             CompressedRistretto::from_slice(&proto.e)
                 .decompress()
@@ -89,10 +89,18 @@ impl TryFrom<proto::Ciphertext> for Ciphertext {
     }
 }
 
-impl TryFrom<proto::EncryptedCodes> for EncryptedCodes {
+impl TryFrom<proto::Ciphertext> for Ciphertext {
     type Error = MessageError;
 
-    fn try_from(proto: proto::EncryptedCodes) -> Result<Self, Self::Error> {
+    fn try_from(proto: proto::Ciphertext) -> Result<Self, Self::Error> {
+        TryFrom::try_from(&proto)
+    }
+}
+
+impl TryFrom<&proto::EncryptedCodes> for EncryptedCodes {
+    type Error = MessageError;
+
+    fn try_from(proto: &proto::EncryptedCodes) -> Result<Self, Self::Error> {
         let proto::EncryptedCodes {
             x_code: x_proto,
             y_code: y_proto,
@@ -111,7 +119,7 @@ impl TryFrom<proto::EncryptedCodes> for EncryptedCodes {
         }
         let enc_key: Option<EncryptionKey> = match enc_key {
             Some(ek) => Some(EncryptionKey::from(
-                CompressedRistretto::from_slice(&ek)
+                CompressedRistretto::from_slice(ek)
                     .decompress()
                     .ok_or(MessageError::InvalidEncryptionKey)?,
             )),
@@ -126,12 +134,42 @@ impl TryFrom<proto::EncryptedCodes> for EncryptedCodes {
     }
 }
 
-impl From<Ciphertext> for proto::Ciphertext {
-    fn from(ct: rust_elgamal::Ciphertext) -> Self {
+impl TryFrom<proto::EncryptedCodes> for EncryptedCodes {
+    type Error = MessageError;
+
+    fn try_from(proto: proto::EncryptedCodes) -> Result<Self, Self::Error> {
+        TryFrom::try_from(&proto)
+    }
+}
+
+impl From<&Ciphertext> for proto::Ciphertext {
+    fn from(ct: &rust_elgamal::Ciphertext) -> Self {
         let (e, c) = ct.inner();
         Self {
             e: e.compress().to_bytes().to_vec(),
             c: c.compress().to_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<Ciphertext> for proto::Ciphertext {
+    fn from(ct: rust_elgamal::Ciphertext) -> Self {
+        From::from(&ct)
+    }
+}
+
+impl From<&EncryptedCodes> for proto::EncryptedCodes {
+    fn from(codes: &EncryptedCodes) -> Self {
+        let EncryptedCodes {
+            x_code,
+            y_code,
+            enc_key,
+        } = codes;
+
+        Self {
+            x_code: x_code.iter().map(proto::Ciphertext::from).collect(),
+            y_code: y_code.iter().map(proto::Ciphertext::from).collect(),
+            enc_key: enc_key.map(|ek| ek.as_ref().compress().to_bytes().to_vec()),
         }
     }
 }

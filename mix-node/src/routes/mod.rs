@@ -4,7 +4,7 @@ use axum::response::Json;
 use rust_elgamal::{Ciphertext, EncryptionKey};
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedCodes {
     #[serde(deserialize_with = "deserialize_vec_with_capacity")]
     pub x_code: Vec<Ciphertext>,
