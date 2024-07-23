@@ -13,9 +13,9 @@ pub fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
     let archived_iris_code = new_iris_code.clone();
 
     // Encode bits
-    let mut new_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    let mut new_user: BitVec = BitVec::with_capacity(N_BITS * 2);
     new_user.extend(encode_bits(&new_iris_code[..]));
-    let mut archived_user: BitVec<u8, Lsb0> = BitVec::with_capacity(N_BITS * 2);
+    let mut archived_user: BitVec = BitVec::with_capacity(N_BITS * 2);
     archived_user.extend(encode_bits(&archived_iris_code[..]));
 
     // Encrypt
@@ -87,20 +87,20 @@ mod tests {
 
     #[test]
     fn test_encode_bits() {
-        let bits = BitVec::<u8, Msb0>::from_slice(&[0b11100100]);
-        let expected = BitVec::<u8, Msb0>::from_slice(&[0b10101001, 0b01100101]);
+        let bits = bitvec![1, 1, 1, 0, 0, 1, 0, 0];
+        let expected = bitvec![1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1];
 
-        let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
+        let enc_bits: BitVec = encode_bits(&bits[..]).collect();
 
         assert_eq!(enc_bits, expected);
     }
 
     #[test]
     fn test_decode_bits() {
-        let bits = BitVec::<u8, Msb0>::from_slice(&[0b11100100]);
-        let enc_bits: BitVec<u8, Lsb0> = encode_bits(&bits[..]).collect();
+        let bits = bitvec![1, 1, 1, 0, 0, 1, 0, 0];
+        let enc_bits = bitvec![1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1];
 
-        let dec_bits: BitVec<u8, Msb0> = decode_bits(&enc_bits[..]).collect();
+        let dec_bits: BitVec = decode_bits(&enc_bits[..]).collect();
         assert_eq!(bits, dec_bits);
     }
 }
