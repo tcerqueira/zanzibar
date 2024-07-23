@@ -4,8 +4,6 @@ on:
     branches:
       - master
   workflow_dispatch:
-    branches:
-      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,4 +15,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
       - run: cargo bench
