@@ -1,7 +1,13 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let proto = "proto/mix-node.proto";
-    tonic_build::compile_protos(proto)?;
+    let includes = ["proto/"];
+    let protos = ["proto/mix-node.proto"];
+
+    tonic_build::configure()
+        .protoc_arg("--experimental_allow_proto3_optional")
+        .compile(&protos, &includes)?;
     // prevent needing to rebuild if files (or deps) haven't changed
-    println!("cargo:rerun-if-changed={}", proto);
+    for proto in protos {
+        println!("cargo:rerun-if-changed={}", proto);
+    }
     Ok(())
 }
