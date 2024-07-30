@@ -55,8 +55,6 @@ impl MixNode for MixNodeService {
 }
 
 pub fn service() -> Router {
-    // TODO: add bench
-    // TODO: add tracing
     // TODO: add auth
     let mix_node = MixNodeService;
     Server::builder().add_service(MixNodeServer::new(mix_node))

@@ -22,7 +22,7 @@ rand = "0.8"
 rayon = "1"
 mimalloc = "0.1"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
 
 [build-dependencies]

@@ -1,9 +1,7 @@
 use mix_node::AppState;
 
-use mimalloc::MiMalloc as GlobalAllocator;
-
 #[global_allocator]
-static GLOBAL: GlobalAllocator = GlobalAllocator;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_http::Error> {

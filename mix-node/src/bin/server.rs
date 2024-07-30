@@ -1,14 +1,12 @@
 use mix_node::AppState;
 
-use mimalloc::MiMalloc as GlobalAllocator;
-
 #[global_allocator]
-static GLOBAL: GlobalAllocator = GlobalAllocator;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::level_filters::LevelFilter::DEBUG)
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await?;

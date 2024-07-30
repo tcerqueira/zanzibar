@@ -10,10 +10,8 @@ use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_T
 use std::sync::Arc;
 use tonic::transport::Channel;
 
-use mimalloc::MiMalloc as GlobalAllocator;
-
 #[global_allocator]
-static GLOBAL: GlobalAllocator = GlobalAllocator;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
     let mut rng = StdRng::seed_from_u64(7);

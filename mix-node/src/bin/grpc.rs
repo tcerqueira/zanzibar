@@ -1,16 +1,18 @@
 use mix_node::grpc;
 
-use mimalloc::MiMalloc as GlobalAllocator;
-
 #[global_allocator]
-static GLOBAL: GlobalAllocator = GlobalAllocator;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     let listener = tokio::net::TcpListener::bind("[::1]:0").await?;
     let port = listener.local_addr()?.port();
 
-    println!("Listening on http://localhost:{port}...");
+    tracing::info!("Listening on http://localhost:{port}...");
     let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
     grpc::service().serve_with_incoming(stream).await?;
     Ok(())

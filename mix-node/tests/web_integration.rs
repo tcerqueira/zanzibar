@@ -6,10 +6,8 @@ use mix_node::testing::{self, TestApp};
 use reqwest::StatusCode;
 use std::{error::Error, iter};
 
-use mimalloc::MiMalloc as GlobalAllocator;
-
 #[global_allocator]
-static GLOBAL: GlobalAllocator = GlobalAllocator;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 const N_BITS: usize = common::N_BITS;
 
