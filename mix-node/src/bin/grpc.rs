@@ -1,4 +1,4 @@
-use mix_node::grpc;
+use mix_node::{grpc, AppState};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -14,6 +14,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Listening on http://localhost:{port}...");
     let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-    grpc::service().serve_with_incoming(stream).await?;
+
+    let state = AppState::new(std::env::var("AUTH_TOKEN").ok());
+    grpc::app(state).serve_with_incoming(stream).await?;
     Ok(())
 }

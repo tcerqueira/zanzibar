@@ -143,7 +143,7 @@ fn bench_grpc_requests(c: &mut Criterion) {
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_grpc());
+    let test_app = rt.block_on(testing::create_grpc(None));
     let client = rt
         .block_on(MixNodeClient::connect(format!(
             "http://localhost:{}",

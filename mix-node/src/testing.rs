@@ -21,7 +21,7 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
     TestApp { port, join_handle }
 }
 
-pub async fn create_grpc() -> TestApp {
+pub async fn create_grpc(auth_token: Option<String>) -> TestApp {
     // Only for debugging purposes
     init_tracing();
     let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
@@ -29,7 +29,8 @@ pub async fn create_grpc() -> TestApp {
 
     let join_handle = tokio::spawn(async move {
         let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        grpc::service().serve_with_incoming(stream).await.unwrap();
+        let state = AppState::new(auth_token);
+        grpc::app(state).serve_with_incoming(stream).await.unwrap();
     });
 
     TestApp { port, join_handle }
