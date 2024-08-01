@@ -1,7 +1,6 @@
 use bitvec::prelude::*;
-use mix_node::routes::EncryptedCodes;
-use rand::CryptoRng;
-use rand::Rng;
+use mix_node::EncryptedCodes;
+use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::iter;
 

@@ -1,8 +1,10 @@
 mod common;
 
 use bitvec::prelude::*;
-use mix_node::routes::EncryptedCodes;
-use mix_node::testing::{self, TestApp};
+use mix_node::{
+    testing::{self, TestApp},
+    EncryptedCodes,
+};
 use reqwest::StatusCode;
 use std::{error::Error, iter};
 

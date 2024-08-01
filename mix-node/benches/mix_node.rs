@@ -1,8 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use mix_node::{
     grpc::proto::{self, mix_node_client::MixNodeClient},
-    routes::EncryptedCodes,
-    testing, N_BITS,
+    testing, EncryptedCodes, N_BITS,
 };
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;

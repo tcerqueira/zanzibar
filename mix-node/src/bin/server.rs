@@ -1,4 +1,4 @@
-use mix_node::AppState;
+use mix_node::{rest, AppState};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -14,6 +14,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Listening on http://localhost:{port}...");
     let state = AppState::new(std::env::var("AUTH_TOKEN").ok());
-    axum::serve(listener, mix_node::app(state)).await?;
+    axum::serve(listener, rest::app(state)).await?;
     Ok(())
 }

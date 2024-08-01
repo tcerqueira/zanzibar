@@ -15,7 +15,9 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
 
     let join_handle = tokio::spawn(async move {
         let state = AppState::new(auth_token);
-        axum::serve(listener, crate::app(state)).await.unwrap();
+        axum::serve(listener, crate::rest::app(state))
+            .await
+            .unwrap();
     });
 
     TestApp { port, join_handle }

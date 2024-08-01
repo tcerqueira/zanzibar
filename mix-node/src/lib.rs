@@ -1,16 +1,12 @@
-mod auth;
 pub mod grpc;
+pub mod rest;
 pub(crate) mod rokio;
-pub mod routes;
 pub mod testing;
 
-use axum::extract::DefaultBodyLimit;
-use axum::middleware;
-use axum::{routing::post, Router};
 use rand::{rngs::StdRng, SeedableRng};
-use rust_elgamal::{EncryptionKey, RistrettoPoint};
+use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
-use tower_http::trace::TraceLayer;
 
 pub const N_BITS: usize = 25600;
 
@@ -27,16 +23,23 @@ impl AppState {
     }
 }
 
-pub fn app(state: AppState) -> Router {
-    Router::new()
-        .route("/remix", post(routes::remix_handler))
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth::auth_middleware,
-        ))
-        .layer(DefaultBodyLimit::max(12_000_000 /* 12MB */))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptedCodes {
+    #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    pub x_code: Vec<Ciphertext>,
+    #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    pub y_code: Vec<Ciphertext>,
+    pub enc_key: Option<EncryptionKey>,
+}
+
+fn deserialize_vec_with_capacity<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    let mut vec = Vec::with_capacity(N_BITS);
+    Vec::deserialize_in_place(deserializer, &mut vec)?;
+    Ok(vec)
 }
 
 fn enc_key() -> &'static EncryptionKey {

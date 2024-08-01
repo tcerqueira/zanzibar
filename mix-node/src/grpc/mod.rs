@@ -1,14 +1,13 @@
-use std::sync::Arc;
-
-use crate::routes::EncryptedCodes;
-use crate::{rokio, AppState};
+use crate::{rokio, AppState, EncryptedCodes};
 use proto::mix_node_server::MixNode;
 use rust_elgamal::{Ciphertext, CompressedRistretto, EncryptionKey};
+use std::sync::Arc;
 use thiserror::Error;
-use tonic::metadata::MetadataValue;
-use tonic::transport::Server;
-use tonic::Status;
-use tonic::{transport::server::Router, Request, Response};
+use tonic::{
+    metadata::MetadataValue,
+    transport::{server::Router, Server},
+    Request, Response, Status,
+};
 
 pub mod proto {
     tonic::include_proto!("mix_node");

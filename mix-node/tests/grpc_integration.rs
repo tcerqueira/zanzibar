@@ -1,10 +1,11 @@
 mod common;
 
 use bitvec::prelude::*;
-use mix_node::grpc::proto;
-use mix_node::grpc::proto::mix_node_client::MixNodeClient;
-use mix_node::routes::EncryptedCodes;
-use mix_node::testing::{self, TestApp};
+use mix_node::{
+    grpc::proto::{self, mix_node_client::MixNodeClient},
+    testing::{self, TestApp},
+    EncryptedCodes,
+};
 use std::{error::Error, iter};
 use tonic::{Code, Request};
 

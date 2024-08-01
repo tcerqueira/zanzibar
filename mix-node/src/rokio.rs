@@ -4,8 +4,7 @@
 //! but to sum it up the that is more adequate for blocking IO and not CPU heavy operations. For that, using a dedicated thread pool is more appropriate thus the use of
 //! [`rayon`].
 
-use std::panic;
-use std::panic::AssertUnwindSafe;
+use std::panic::{self, AssertUnwindSafe};
 
 pub async fn spawn<F, R>(f: F) -> R
 where
