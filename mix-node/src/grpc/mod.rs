@@ -1,108 +1,25 @@
-use crate::{rokio, AppState, EncryptedCodes};
-use proto::mix_node_server::MixNode;
+mod error;
+mod middleware;
+mod service;
+
+use crate::{AppState, EncryptedCodes};
+use error::MessageError;
 use rust_elgamal::{Ciphertext, CompressedRistretto, EncryptionKey};
+use service::MixNodeService;
 use std::sync::Arc;
-use thiserror::Error;
-use tonic::{
-    metadata::MetadataValue,
-    transport::{server::Router, Server},
-    Request, Response, Status,
-};
+use tonic::transport::{server::Router, Server};
 
 pub mod proto {
     tonic::include_proto!("mix_node");
-}
-
-#[derive(Debug, Error)]
-pub enum MessageError {
-    #[error("Found invalid ciphertext.")]
-    InvalidCiphertext,
-    #[error("Found invalid encryption key.")]
-    InvalidEncryptionKey,
-    #[error("Codes have mismatched lengths. x:{x_len} =/= y:{y_len}")]
-    LengthMismatch { x_len: usize, y_len: usize },
-}
-
-#[derive(Debug, Clone)]
-pub struct MixNodeService {
-    #[allow(unused)] // Example of how to share state in a gRPC app
-    state: Arc<AppState>,
-}
-
-impl MixNodeService {
-    pub fn new(state: Arc<AppState>) -> Self {
-        Self { state }
-    }
-}
-
-#[tonic::async_trait]
-impl MixNode for MixNodeService {
-    async fn remix(
-        &self,
-        request: Request<proto::EncryptedCodes>,
-    ) -> tonic::Result<Response<proto::EncryptedCodes>> {
-        let mut codes: EncryptedCodes = request.into_inner().try_into()?;
-
-        if codes.x_code.len() != codes.y_code.len() {
-            tracing::error!("length mismatch between codes");
-            Err(MessageError::LengthMismatch {
-                x_len: codes.x_code.len(),
-                y_len: codes.y_code.len(),
-            })?;
-        }
-
-        let codes = rokio::spawn(move || {
-            remix::par::remix(
-                &mut codes.x_code,
-                &mut codes.y_code,
-                &codes.enc_key.unwrap_or(*crate::enc_key()),
-            );
-            codes
-        })
-        .await;
-
-        Ok(Response::new(codes.into()))
-    }
 }
 
 pub fn app(state: AppState) -> Router {
     let state = Arc::new(state);
     let mix_node = proto::mix_node_server::MixNodeServer::with_interceptor(
         MixNodeService::new(Arc::clone(&state)),
-        auth_middleware(state),
+        middleware::auth_middleware(state),
     );
     Server::builder().add_service(mix_node)
-}
-
-fn auth_middleware(
-    state: Arc<AppState>,
-) -> impl FnMut(Request<()>) -> Result<Request<()>, Status> + Clone {
-    move |req| {
-        let auth_token: Option<MetadataValue<_>> = state
-            .auth_token
-            .and_then(|token| format!("Bearer {token}").parse().ok());
-        let auth_req = req.metadata().get("authorization");
-
-        match (auth_token, auth_req) {
-            // AUTH_TOKEN is set on the server and in the request header so we check
-            (Some(auth_token), Some(auth_req)) if auth_token == *auth_req => Ok(req),
-            // AUTH_TOKEN is not set on the server so we disable auth
-            (None, _) => Ok(req),
-            _ => Err(Status::unauthenticated("Invalid auth token")),
-        }
-    }
-}
-
-impl From<MessageError> for Status {
-    fn from(error: MessageError) -> Self {
-        match error {
-            MessageError::InvalidCiphertext
-            | MessageError::InvalidEncryptionKey
-            | MessageError::LengthMismatch { x_len: _, y_len: _ } => {
-                Status::invalid_argument(error.to_string())
-            }
-        }
-    }
 }
 
 impl TryFrom<&proto::Ciphertext> for Ciphertext {
