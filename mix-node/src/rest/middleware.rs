@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::AppState;
 use axum::{
     extract::{Request, State},
@@ -12,12 +14,13 @@ use axum_extra::{
 
 #[tracing::instrument(skip_all)]
 pub async fn auth_middleware(
-    State(AppState { auth_token }): State<AppState>,
+    State(state): State<Arc<AppState>>,
     auth_header: Option<TypedHeader<Authorization<Bearer>>>,
     request: Request,
     next: Next,
 ) -> Response {
     let fut_next_run = next.run(request);
+    let auth_token = state.auth_token;
 
     match (auth_token, auth_header) {
         // AUTH_TOKEN is set on the server and in the request header so we check

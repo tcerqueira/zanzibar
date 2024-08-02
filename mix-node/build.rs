@@ -9,5 +9,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for proto in protos {
         println!("cargo:rerun-if-changed={}", proto);
     }
+
+    // trigger recompilation when a new migration is added
+    println!("cargo:rerun-if-changed=migrations");
+
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::{grpc, AppState};
+use crate::{db, grpc, AppState};
 use std::sync::OnceLock;
 use tokio::task::JoinHandle;
 
@@ -14,7 +14,15 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
     let port = listener.local_addr().unwrap().port();
 
     let join_handle = tokio::spawn(async move {
-        let state = AppState::new(auth_token);
+        let conn = db::get_database()
+            .await
+            .expect("connection to database failed");
+        sqlx::migrate!()
+            .run(&conn)
+            .await
+            .expect("database migration failed");
+
+        let state = AppState::new(auth_token, conn);
         axum::serve(listener, crate::rest::app(state))
             .await
             .unwrap();
@@ -30,8 +38,16 @@ pub async fn create_grpc(auth_token: Option<String>) -> TestApp {
     let port = listener.local_addr().unwrap().port();
 
     let join_handle = tokio::spawn(async move {
+        let conn = db::get_database()
+            .await
+            .expect("connection to database failed");
+        sqlx::migrate!()
+            .run(&conn)
+            .await
+            .expect("database migration failed");
+
+        let state = AppState::new(auth_token, conn);
         let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        let state = AppState::new(auth_token);
         grpc::app(state).serve_with_incoming(stream).await.unwrap();
     });
 

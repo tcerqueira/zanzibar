@@ -24,6 +24,8 @@ mimalloc = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
+bincode = "1"
 
 [build-dependencies]
 tonic-build = "0.12"

@@ -1,4 +1,4 @@
-use mix_node::{rest, AppState};
+use mix_node::{db, rest, AppState};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -15,6 +15,7 @@ async fn main() -> Result<(), lambda_http::Error> {
 
     lambda_http::tracing::init_default_subscriber();
 
-    let state = AppState::new(std::env::var("AUTH_TOKEN").ok());
+    let conn = db::get_database().await?;
+    let state = AppState::new(std::env::var("AUTH_TOKEN").ok(), conn);
     lambda_http::run(rest::app(state)).await
 }

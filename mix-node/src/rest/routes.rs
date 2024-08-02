@@ -1,8 +1,10 @@
-use crate::{rokio, EncryptedCodes};
-use axum::{http::StatusCode, response::Json};
+use std::sync::Arc;
+
+use crate::{rokio, AppState, EncryptedCodes};
+use axum::{extract::State, http::StatusCode, response::Json};
 
 #[tracing::instrument(
-        skip(codes),
+        skip(_state, codes),
         fields(
             x_code.len = codes.x_code.len(),
             y_code.len = codes.y_code.len(),
@@ -10,6 +12,7 @@ use axum::{http::StatusCode, response::Json};
         )
     )]
 pub async fn remix_handler(
+    State(_state): State<Arc<AppState>>,
     Json(mut codes): Json<EncryptedCodes>,
 ) -> Result<Json<EncryptedCodes>, (StatusCode, &'static str)> {
     if codes.x_code.len() != codes.y_code.len() {

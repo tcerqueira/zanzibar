@@ -1,3 +1,4 @@
+pub mod db;
 pub mod grpc;
 pub mod rest;
 pub(crate) mod rokio;
@@ -6,19 +7,23 @@ pub mod testing;
 use rand::{rngs::StdRng, SeedableRng};
 use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
 use serde::{Deserialize, Deserializer, Serialize};
+use sqlx::PgPool;
 use std::sync::OnceLock;
 
 pub const N_BITS: usize = 25600;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AppState {
+    // TODO: add secrecy
     auth_token: Option<&'static str>,
+    _pool: PgPool,
 }
 
 impl AppState {
-    pub fn new(auth_token: Option<String>) -> Self {
+    pub fn new(auth_token: Option<String>, pool: PgPool) -> Self {
         Self {
             auth_token: auth_token.map(|s| &*s.leak()),
+            _pool: pool,
         }
     }
 }

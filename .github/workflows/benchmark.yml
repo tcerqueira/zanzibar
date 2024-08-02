@@ -12,8 +12,24 @@ jobs:
   bench:
     name: Bench
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: username
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: iris-codes
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: arduino/setup-protoc@v3
+      - name: Run migrations
+        run: |
+          cargo install sqlx-cli
+          sqlx migrate run --source mix-node/migrations
+        env:
+          DATABASE_URL: postgres://username:password@localhost/iris-codes
       - run: cargo bench
