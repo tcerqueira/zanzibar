@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use format as f;
 use mix_node::{
     grpc::proto::{self, mix_node_client::MixNodeClient},
     testing, EncryptedCodes, N_BITS,
@@ -6,11 +7,13 @@ use mix_node::{
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
 use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 use tonic::transport::Channel;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+const N_SMALL_BITS: usize = 10;
 
 fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
     let mut rng = StdRng::seed_from_u64(7);
@@ -25,6 +28,14 @@ fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
     let ct2: Vec<_> = (0..N_BITS).map(&mut encrypt).collect();
 
     (ct1, ct2, rng)
+}
+
+fn payload_subset(codes: &EncryptedCodes, range: Range<usize>) -> EncryptedCodes {
+    EncryptedCodes {
+        x_code: codes.x_code[range.clone()].to_vec(),
+        y_code: codes.y_code[range].to_vec(),
+        enc_key: codes.enc_key,
+    }
 }
 
 fn bench_serialization_json(c: &mut Criterion) {
@@ -50,6 +61,20 @@ fn bench_serialization_json(c: &mut Criterion) {
             let _value = serde_json::to_value(&payload);
         })
     });
+
+    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
+
+    group.bench_function(f!("to string {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _string = serde_json::to_string(&payload);
+        })
+    });
+
+    group.bench_function(f!("to value {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _value = serde_json::to_value(&payload);
+        })
+    });
 }
 
 fn bench_deserialization_json(c: &mut Criterion) {
@@ -63,11 +88,20 @@ fn bench_deserialization_json(c: &mut Criterion) {
         y_code: ct2,
         enc_key: Some(enc_key),
     };
-    let payload = serde_json::to_string(&payload).unwrap();
+    let payload_str = serde_json::to_string(&payload).unwrap();
 
     group.bench_function("from string", |b| {
         b.iter(|| {
-            let _value: EncryptedCodes = serde_json::from_str(&payload).unwrap();
+            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
+        })
+    });
+
+    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
+    let payload_str = serde_json::to_string(&payload).unwrap();
+
+    group.bench_function(f!("from string {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
         })
     });
 }
@@ -127,6 +161,18 @@ fn bench_requests(c: &mut Criterion) {
     });
 
     group.bench_function("6 parallel", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 6, test_app.port, Arc::clone(&payload)))
+    });
+
+    let payload = Arc::new(payload_subset(&payload, 0..N_SMALL_BITS));
+
+    group.bench_function(f!("one request {N_SMALL_BITS} bits subset"), |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 1, test_app.port, Arc::clone(&payload)))
+    });
+
+    group.bench_function(f!("6 parallel {N_SMALL_BITS} bits subset"), |b| {
         b.to_async(&rt)
             .iter(|| bench_fn(Arc::clone(&client), 6, test_app.port, Arc::clone(&payload)))
     });
@@ -193,6 +239,18 @@ fn bench_grpc_requests(c: &mut Criterion) {
     });
 
     group.bench_function("6 parallel", |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 6, Arc::clone(&payload)))
+    });
+
+    let payload = Arc::new(payload_subset(&payload, 0..N_SMALL_BITS));
+
+    group.bench_function(f!("one request {N_SMALL_BITS} bits subset"), |b| {
+        b.to_async(&rt)
+            .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
+    });
+
+    group.bench_function(f!("6 parallel {N_SMALL_BITS} bits subset"), |b| {
         b.to_async(&rt)
             .iter(|| bench_fn(Arc::clone(&client), 6, Arc::clone(&payload)))
     });
