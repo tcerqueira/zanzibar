@@ -14,6 +14,7 @@ pub fn rerandomise(
         let mut rng = rand::thread_rng();
         let r = Scalar::from(rng.gen::<u32>());
         *x = enc_key.rerandomise_with(*x, r);
+        let r = Scalar::from(rng.gen::<u32>());
         *y = enc_key.rerandomise_with(*y, r);
     });
 }

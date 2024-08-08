@@ -9,6 +9,7 @@ edition = "2021"
 rand = "0.8"
 rayon = "1"
 rust-elgamal = "0.4"
+elastic-elgamal = { version = "0.3", features = ["serde"] }
 
 [dev-dependencies]
 rstest = "0.21"
@@ -16,4 +17,8 @@ criterion = "0.5"
 
 [[bench]]
 name = "remix"
+harness = false
+
+[[bench]]
+name = "elastic_remix"
 harness = false

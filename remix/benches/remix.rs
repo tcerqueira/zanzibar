@@ -129,10 +129,10 @@ fn bench_all(c: &mut Criterion) {
 }
 
 criterion_group!(
-    remix_benches,
+    benches,
     bench_shuffle_pairs,
     bench_shuffle_bits,
     bench_rerandomise,
     bench_all,
 );
-criterion_main!(remix_benches);
+criterion_main!(benches);

@@ -30,13 +30,14 @@ impl AppState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedCodes {
-    #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
     pub x_code: Vec<Ciphertext>,
-    #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
     pub y_code: Vec<Ciphertext>,
     pub enc_key: Option<EncryptionKey>,
 }
 
+#[allow(unused)]
 fn deserialize_vec_with_capacity<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,

@@ -1,10 +1,11 @@
 //! Implementation of the re-mixing described in the article :TBD:.
 
+pub mod elastic;
+pub mod par;
+
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{Ciphertext, EncryptionKey, Scalar};
 use std::iter::zip;
-
-pub mod par;
 
 /// Shuffles groups of 2 [`Ciphertext`]s randomly but equally for both slices.
 /// So, the ciphertext of the slices at given index before shuffling will endup randomly but at the same index after
@@ -14,13 +15,8 @@ pub mod par;
 /// Internally, it uses the [Fisher-Yates shuffle].
 ///
 /// [Fisher-Yates shuffle]: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-pub fn shuffle_pairs(
-    x_cipher: &mut [Ciphertext],
-    y_cipher: &mut [Ciphertext],
-    rng: &mut (impl Rng + CryptoRng),
-) {
+pub fn shuffle_pairs<T>(x_cipher: &mut [T], y_cipher: &mut [T], rng: &mut (impl Rng + CryptoRng)) {
     assert_eq!(x_cipher.len(), y_cipher.len());
-    // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     const STEP: usize = 2;
     let total_pairs = x_cipher.len() / STEP;
     for (pair_idx, arr_idx) in (0..x_cipher.len() - STEP).step_by(STEP).enumerate() {
@@ -36,13 +32,8 @@ pub fn shuffle_pairs(
 
 /// Iterates over every pair of [`Ciphertext`] and flips a coin (probability of 50%) to swap the ciphertexts
 /// on the pair.
-pub fn shuffle_bits(
-    x_cipher: &mut [Ciphertext],
-    y_cipher: &mut [Ciphertext],
-    rng: &mut (impl Rng + CryptoRng),
-) {
+pub fn shuffle_bits<T>(x_cipher: &mut [T], y_cipher: &mut [T], rng: &mut (impl Rng + CryptoRng)) {
     assert_eq!(x_cipher.len(), y_cipher.len());
-    // TODO: Method only accepts Ciphertext slices but it can be generic over any type
     for i in (0..x_cipher.len()).step_by(2) {
         // Coin flip 50/50
         if rng.gen() {
@@ -62,6 +53,7 @@ pub fn rerandomise(
     zip(x_cipher, y_cipher).for_each(|(x, y)| {
         let r = Scalar::from(rng.gen::<u32>());
         *x = enc_key.rerandomise_with(*x, r);
+        let r = Scalar::from(rng.gen::<u32>());
         *y = enc_key.rerandomise_with(*y, r);
     });
 }
