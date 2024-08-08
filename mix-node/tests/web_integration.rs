@@ -78,13 +78,15 @@ async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
 
     // Bad request + Serialization
     let client = reqwest::Client::new();
-    let response = client
-        .post(format!("http://localhost:{port}/remix"))
-        .send()
-        .await?;
+    for route in ["remix", "elastic-remix"] {
+        let response = client
+            .post(format!("http://localhost:{port}/{route}"))
+            .send()
+            .await?;
 
-    // Assert
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        // Assert
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
     Ok(())
 }
 

@@ -12,7 +12,8 @@ pub struct TestApp {
 
 pub async fn create_app(auth_token: Option<String>) -> TestApp {
     // Only for debugging purposes
-    init_tracing();
+    // init_tracing();
+
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
@@ -36,7 +37,8 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
 
 pub async fn create_grpc(auth_token: Option<String>) -> TestApp {
     // Only for debugging purposes
-    init_tracing();
+    // init_tracing();
+
     let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 

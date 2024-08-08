@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{rokio, AppState, EncryptedCodes};
+use crate::{rokio, AppState, ElasticEncryptedCodes, EncryptedCodes};
 use axum::{extract::State, http::StatusCode, response::Json};
 
 #[tracing::instrument(
@@ -24,7 +24,29 @@ pub async fn remix_handler(
         remix::par::remix(
             &mut codes.x_code,
             &mut codes.y_code,
-            &codes.enc_key.unwrap_or(*crate::enc_key()),
+            codes.enc_key.as_ref().unwrap_or(crate::enc_key()),
+        );
+        codes
+    })
+    .await;
+
+    Ok(Json(codes))
+}
+
+pub async fn elastic_remix_handler(
+    State(_state): State<Arc<AppState>>,
+    Json(mut codes): Json<ElasticEncryptedCodes>,
+) -> Result<Json<ElasticEncryptedCodes>, (StatusCode, &'static str)> {
+    if codes.x_code.len() != codes.y_code.len() {
+        tracing::error!("length mismatch between codes");
+        return Err((StatusCode::BAD_REQUEST, "Codes have mismatched lengths."));
+    }
+
+    let codes = rokio::spawn(move || {
+        remix::elastic::remix(
+            &mut codes.x_code,
+            &mut codes.y_code,
+            codes.enc_key.as_ref().unwrap_or(crate::elastic_enc_key()),
         );
         codes
     })

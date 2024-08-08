@@ -9,7 +9,7 @@ edition = "2021"
 rand = "0.8"
 rayon = "1"
 rust-elgamal = "0.4"
-elastic-elgamal = { version = "0.3", features = ["serde"] }
+elastic-elgamal = "0.3"
 
 [dev-dependencies]
 rstest = "0.21"

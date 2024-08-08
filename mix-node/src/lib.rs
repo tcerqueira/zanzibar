@@ -4,6 +4,7 @@ pub mod rest;
 pub(crate) mod rokio;
 pub mod testing;
 
+use elastic_elgamal::{group::Ristretto, Ciphertext as ElasticCiphertext, Keypair, PublicKey};
 use rand::{rngs::StdRng, SeedableRng};
 use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -37,6 +38,15 @@ pub struct EncryptedCodes {
     pub enc_key: Option<EncryptionKey>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElasticEncryptedCodes {
+    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    pub x_code: Vec<ElasticCiphertext<Ristretto>>,
+    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
+    pub y_code: Vec<ElasticCiphertext<Ristretto>>,
+    pub enc_key: Option<PublicKey<Ristretto>>,
+}
+
 #[allow(unused)]
 fn deserialize_vec_with_capacity<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
@@ -55,5 +65,14 @@ fn enc_key() -> &'static EncryptionKey {
         EncryptionKey::from(RistrettoPoint::random(&mut StdRng::seed_from_u64(
             1234567890,
         )))
+    })
+}
+
+fn elastic_enc_key() -> &'static PublicKey<Ristretto> {
+    // TODO: remove hardcoded encryption key from a fixed seed
+    static ENC_KEY: OnceLock<PublicKey<Ristretto>> = OnceLock::new();
+    ENC_KEY.get_or_init(|| {
+        let receiver = Keypair::generate(&mut StdRng::seed_from_u64(1234567890));
+        receiver.public().clone()
     })
 }

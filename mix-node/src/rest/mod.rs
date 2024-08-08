@@ -10,6 +10,7 @@ use tower_http::trace::TraceLayer;
 pub fn app(state: AppState) -> Router {
     let state = Arc::new(state);
     Router::new()
+        .route("/elastic-remix", post(routes::elastic_remix_handler))
         .route("/remix", post(routes::remix_handler))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),

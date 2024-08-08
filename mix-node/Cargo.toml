@@ -18,6 +18,7 @@ tokio-stream = "0.1"
 serde = { version = "1", features = ["derive"] }
 remix = { path = "../remix" }
 rust-elgamal = { version = "0.4", features = ["enable-serde"] }
+elastic-elgamal = { version = "0.3", features = ["serde"] }
 rand = "0.8"
 rayon = "1"
 mimalloc = "0.1"
