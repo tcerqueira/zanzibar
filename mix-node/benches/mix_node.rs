@@ -114,7 +114,7 @@ fn bench_requests(c: &mut Criterion) {
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(async { testing::create_app(None).await });
+    let test_app = rt.block_on(testing::create_app(None));
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(EncryptedCodes {
@@ -259,10 +259,10 @@ fn bench_grpc_requests(c: &mut Criterion) {
 }
 
 criterion_group!(
-    mix_node_benches,
+    benches,
     bench_serialization_json,
     bench_deserialization_json,
     bench_requests,
     bench_grpc_requests,
 );
-criterion_main!(mix_node_benches);
+criterion_main!(benches);
