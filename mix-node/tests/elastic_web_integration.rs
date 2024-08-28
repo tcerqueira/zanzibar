@@ -17,7 +17,7 @@ const N_BITS: usize = common::N_BITS;
 async fn test_elastic_mix_node() -> Result<(), Box<dyn Error>> {
     let TestApp { port, .. } = testing::create_app(None).await;
 
-    let (codes, dec_key) = common::set_up_elastic_payload();
+    let (codes, receiver) = common::set_up_elastic_payload();
 
     // Shuffle + Rerandomize + Serialization
     let client = reqwest::Client::new();
@@ -35,9 +35,9 @@ async fn test_elastic_mix_node() -> Result<(), Box<dyn Error>> {
 
     // Decrypt
     let dec_new_user: BitVec<u8, Lsb0> =
-        common::elastic_decrypt_bits(&enc_new_user, &dec_key).collect();
+        common::elastic_decrypt_bits(&enc_new_user, receiver.secret()).collect();
     let dec_archived_user: BitVec<u8, Lsb0> =
-        common::elastic_decrypt_bits(&enc_archived_user, &dec_key).collect();
+        common::elastic_decrypt_bits(&enc_archived_user, receiver.secret()).collect();
 
     // Assert result
     let hamming_distance = iter::zip(dec_new_user.iter(), dec_archived_user.iter())

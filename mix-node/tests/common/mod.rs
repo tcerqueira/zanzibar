@@ -40,7 +40,7 @@ pub fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
 }
 
 #[allow(unused)]
-pub fn set_up_elastic_payload() -> (ElasticEncryptedCodes, SecretKey<Ristretto>) {
+pub fn set_up_elastic_payload() -> (ElasticEncryptedCodes, Keypair<Ristretto>) {
     let mut rng = rand::thread_rng();
     let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
     let archived_iris_code = new_iris_code.clone();
@@ -66,7 +66,7 @@ pub fn set_up_elastic_payload() -> (ElasticEncryptedCodes, SecretKey<Ristretto>)
             y_code: enc_archived_user,
             enc_key: Some(enc_key),
         },
-        dec_key,
+        receiver,
     )
 }
 

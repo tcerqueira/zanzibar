@@ -14,6 +14,7 @@ use tonic::transport::Channel;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 const N_SMALL_BITS: usize = 10;
+const N_THREADS: u16 = 11;
 
 fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
     let mut rng = StdRng::seed_from_u64(7);
@@ -160,9 +161,15 @@ fn bench_requests(c: &mut Criterion) {
             .iter(|| bench_fn(Arc::clone(&client), 1, test_app.port, Arc::clone(&payload)))
     });
 
-    group.bench_function("6 parallel", |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 6, test_app.port, Arc::clone(&payload)))
+    group.bench_function(f!("{N_THREADS} parallel"), |b| {
+        b.to_async(&rt).iter(|| {
+            bench_fn(
+                Arc::clone(&client),
+                N_THREADS,
+                test_app.port,
+                Arc::clone(&payload),
+            )
+        })
     });
 
     let payload = Arc::new(payload_subset(&payload, 0..N_SMALL_BITS));
@@ -172,9 +179,15 @@ fn bench_requests(c: &mut Criterion) {
             .iter(|| bench_fn(Arc::clone(&client), 1, test_app.port, Arc::clone(&payload)))
     });
 
-    group.bench_function(f!("6 parallel {N_SMALL_BITS} bits subset"), |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 6, test_app.port, Arc::clone(&payload)))
+    group.bench_function(f!("{N_THREADS} parallel {N_SMALL_BITS} bits subset"), |b| {
+        b.to_async(&rt).iter(|| {
+            bench_fn(
+                Arc::clone(&client),
+                N_THREADS,
+                test_app.port,
+                Arc::clone(&payload),
+            )
+        })
     });
 
     test_app.join_handle.abort();
@@ -238,9 +251,9 @@ fn bench_grpc_requests(c: &mut Criterion) {
             .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
     });
 
-    group.bench_function("6 parallel", |b| {
+    group.bench_function(f!("{N_THREADS} parallel"), |b| {
         b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 6, Arc::clone(&payload)))
+            .iter(|| bench_fn(Arc::clone(&client), N_THREADS, Arc::clone(&payload)))
     });
 
     let payload = Arc::new(payload_subset(&payload, 0..N_SMALL_BITS));
@@ -250,9 +263,9 @@ fn bench_grpc_requests(c: &mut Criterion) {
             .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
     });
 
-    group.bench_function(f!("6 parallel {N_SMALL_BITS} bits subset"), |b| {
+    group.bench_function(f!("{N_THREADS} parallel {N_SMALL_BITS} bits subset"), |b| {
         b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 6, Arc::clone(&payload)))
+            .iter(|| bench_fn(Arc::clone(&client), N_THREADS, Arc::clone(&payload)))
     });
 
     test_app.join_handle.abort();
