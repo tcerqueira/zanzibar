@@ -1,4 +1,7 @@
-use mix_node::{db, rest, AppState};
+use mix_node::{
+    config::{self, Config},
+    db, rest, AppState,
+};
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -14,8 +17,12 @@ async fn main() -> Result<(), lambda_http::Error> {
     std::env::set_var("AWS_LAMBDA_HTTP_IGNORE_STAGE_IN_PATH", "true");
 
     lambda_http::tracing::init_default_subscriber();
+    let Config {
+        application: _app_config,
+        database: db_config,
+    } = config::get_configuration()?;
 
-    let conn = db::get_database().await?;
+    let conn = db::connect_database(db_config).await?;
     let state = AppState::new(std::env::var("AUTH_TOKEN").ok(), conn);
     lambda_http::run(rest::app(state)).await
 }

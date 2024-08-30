@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use format as f;
 use mix_node::{
+    config::get_configuration,
     grpc::proto::{self, mix_node_client::MixNodeClient},
     testing, EncryptedCodes, N_BITS,
 };
@@ -111,11 +112,12 @@ fn bench_requests(c: &mut Criterion) {
     let mut group = c.benchmark_group("Request");
     group.sample_size(20);
 
+    let config = get_configuration().unwrap();
     let (ct1, ct2, mut rng) = setup_bench();
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_app(None));
+    let test_app = rt.block_on(testing::create_app(config));
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(EncryptedCodes {
@@ -197,11 +199,12 @@ fn bench_grpc_requests(c: &mut Criterion) {
     let mut group = c.benchmark_group("gRPC request");
     group.sample_size(20);
 
+    let config = get_configuration().unwrap();
     let (ct1, ct2, mut rng) = setup_bench();
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_grpc(None));
+    let test_app = rt.block_on(testing::create_grpc(config));
     let client = rt
         .block_on(MixNodeClient::connect(format!(
             "http://localhost:{}",

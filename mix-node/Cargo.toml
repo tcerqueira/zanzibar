@@ -16,6 +16,7 @@ prost = "0.13"
 tokio-stream = "0.1"
 # Common
 serde = { version = "1", features = ["derive"] }
+serde-aux = "4"
 remix = { path = "../remix" }
 rust-elgamal = { version = "0.4", features = ["enable-serde"] }
 elastic-elgamal = { version = "0.3", features = ["serde"] }
@@ -25,8 +26,14 @@ mimalloc = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1"
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
+sqlx = { version = "0.8", features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-native-tls",
+] }
 bincode = "1"
+secrecy = { version = "0.8", features = ["serde"] }
+config = { version = "0.14", default-features = false, features = ["yaml"] }
 
 [build-dependencies]
 tonic-build = "0.12"

@@ -1,6 +1,7 @@
-use crate::{db, grpc, AppState};
+use crate::{config::Config, db, grpc, AppState};
 use rand::{CryptoRng, Rng};
 use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
 use std::sync::OnceLock;
 use tokio::task::JoinHandle;
@@ -10,15 +11,24 @@ pub struct TestApp {
     pub join_handle: JoinHandle<()>,
 }
 
-pub async fn create_app(auth_token: Option<String>) -> TestApp {
+pub async fn create_app(config: Config) -> TestApp {
     // Only for debugging purposes
     // init_tracing();
+
+    let Config {
+        application: app_config,
+        database: db_config,
+    } = config;
+    let auth_token = match app_config.auth_token.expose_secret().as_str() {
+        "" => None,
+        tok => Some(tok.to_owned()),
+    };
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
     let join_handle = tokio::spawn(async move {
-        let conn = db::get_database()
+        let conn = db::connect_database(db_config)
             .await
             .expect("connection to database failed");
         sqlx::migrate!()
@@ -35,15 +45,24 @@ pub async fn create_app(auth_token: Option<String>) -> TestApp {
     TestApp { port, join_handle }
 }
 
-pub async fn create_grpc(auth_token: Option<String>) -> TestApp {
+pub async fn create_grpc(config: Config) -> TestApp {
     // Only for debugging purposes
     // init_tracing();
+
+    let Config {
+        application: app_config,
+        database: db_config,
+    } = config;
+    let auth_token = match app_config.auth_token.expose_secret().as_str() {
+        "" => None,
+        tok => Some(tok.to_owned()),
+    };
 
     let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
     let join_handle = tokio::spawn(async move {
-        let conn = db::get_database()
+        let conn = db::connect_database(db_config)
             .await
             .expect("connection to database failed");
         sqlx::migrate!()

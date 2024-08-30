@@ -2,6 +2,7 @@ mod common;
 
 use bitvec::prelude::*;
 use mix_node::{
+    config::get_configuration,
     testing::{self, TestApp},
     ElasticEncryptedCodes,
 };
@@ -15,7 +16,8 @@ const N_BITS: usize = common::N_BITS;
 
 #[tokio::test]
 async fn test_elastic_mix_node() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app(None).await;
+    let config = get_configuration()?;
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     let (codes, receiver) = common::set_up_elastic_payload();
 
@@ -52,7 +54,8 @@ async fn test_elastic_mix_node() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app(None).await;
+    let config = get_configuration()?;
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     let (mut codes, _dec_key) = common::set_up_elastic_payload();
     // Remove elements to cause a size mismatch

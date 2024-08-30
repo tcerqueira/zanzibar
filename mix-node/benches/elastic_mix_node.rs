@@ -8,7 +8,7 @@ use elastic_elgamal::{
     group::Ristretto, Ciphertext as ElasticCiphertext, DiscreteLogTable, Keypair, SecretKey,
 };
 use format as f;
-use mix_node::{testing, ElasticEncryptedCodes, N_BITS};
+use mix_node::{config::get_configuration, testing, ElasticEncryptedCodes, N_BITS};
 use rand::{rngs::StdRng, SeedableRng};
 use reqwest::Client;
 use std::{ops::Range, sync::Arc};
@@ -49,11 +49,12 @@ fn bench_elastic_mix_node(c: &mut Criterion) {
     let mut group = c.benchmark_group("Elastic request");
     group.sample_size(20);
 
+    let config = get_configuration().unwrap();
     let (ct1, ct2, receiver) = setup_bench();
     let enc_key = receiver.public();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_app(None));
+    let test_app = rt.block_on(testing::create_app(config));
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(ElasticEncryptedCodes {

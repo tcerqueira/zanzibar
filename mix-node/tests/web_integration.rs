@@ -2,10 +2,12 @@ mod common;
 
 use bitvec::prelude::*;
 use mix_node::{
+    config::get_configuration,
     testing::{self, TestApp},
     EncryptedCodes,
 };
 use reqwest::StatusCode;
+use secrecy::Secret;
 use std::{error::Error, iter};
 
 #[global_allocator]
@@ -15,7 +17,8 @@ const N_BITS: usize = common::N_BITS;
 
 #[tokio::test]
 async fn test_mix_node() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app(None).await;
+    let config = get_configuration()?;
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     let (codes, dec_key) = common::set_up_payload();
 
@@ -51,7 +54,8 @@ async fn test_mix_node() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } = testing::create_app(None).await;
+    let config = get_configuration()?;
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     let (mut codes, _dec_key) = common::set_up_payload();
     // Remove elements to cause a size mismatch
@@ -73,8 +77,9 @@ async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
-    let TestApp { port, .. } =
-        testing::create_app(Some("test_mix_node_unauthorized".to_string())).await;
+    let mut config = get_configuration()?;
+    config.application.auth_token = Secret::new("test_mix_node_unauthorized".to_string());
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     // Bad request + Serialization
     let client = reqwest::Client::new();
@@ -93,7 +98,9 @@ async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 async fn test_mix_node_authorized() -> Result<(), Box<dyn Error>> {
     let auth_token = "test_mix_node_authorized";
-    let TestApp { port, .. } = testing::create_app(Some(auth_token.to_string())).await;
+    let mut config = get_configuration()?;
+    config.application.auth_token = Secret::new(auth_token.to_string());
+    let TestApp { port, .. } = testing::create_app(config).await;
 
     let (codes, _dec_key) = common::set_up_payload();
 
