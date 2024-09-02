@@ -6,7 +6,7 @@ use crate::{rokio, AppState, EncryptedCodes};
 use std::sync::Arc;
 use tonic::{Request, Response};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MixNodeService {
     #[allow(unused)] // Example of how to share state in a gRPC app
     state: Arc<AppState>,

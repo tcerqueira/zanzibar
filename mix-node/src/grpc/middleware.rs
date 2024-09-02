@@ -1,4 +1,5 @@
 use crate::AppState;
+use secrecy::ExposeSecret;
 use std::sync::Arc;
 use tonic::{metadata::MetadataValue, Request, Status};
 
@@ -8,6 +9,8 @@ pub fn auth_middleware(
     move |req| {
         let auth_token: Option<MetadataValue<_>> = state
             .auth_token
+            .expose_secret()
+            .as_ref()
             .and_then(|token| format!("Bearer {token}").parse().ok());
         let auth_req = req.metadata().get("authorization");
 

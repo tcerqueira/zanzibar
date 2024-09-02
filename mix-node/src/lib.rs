@@ -8,23 +8,22 @@ pub mod testing;
 use elastic_elgamal::{group::Ristretto, Ciphertext as ElasticCiphertext, Keypair, PublicKey};
 use rand::{rngs::StdRng, SeedableRng};
 use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
+use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::PgPool;
-use std::sync::OnceLock;
+use std::{fmt::Debug, sync::OnceLock};
 
 pub const N_BITS: usize = 25600;
 
-#[derive(Debug)]
 pub struct AppState {
-    // TODO: add secrecy
-    auth_token: Option<&'static str>,
+    auth_token: Secret<Option<String>>,
     _pool: PgPool,
 }
 
 impl AppState {
     pub fn new(auth_token: Option<String>, pool: PgPool) -> Self {
         Self {
-            auth_token: auth_token.map(|s| &*s.leak()),
+            auth_token: Secret::new(auth_token),
             _pool: pool,
         }
     }
