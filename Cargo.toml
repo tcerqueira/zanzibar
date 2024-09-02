@@ -1,5 +1,5 @@
 [workspace]
-members = ["remix", "mix-node", "thash"]
+members = ["remix", "mix-node"]
 resolver = "2"
 
 [profile.test]
