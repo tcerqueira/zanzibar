@@ -33,7 +33,10 @@ sqlx = { version = "0.8", features = [
 ] }
 bincode = "1"
 secrecy = { version = "0.8", features = ["serde"] }
-config = { version = "0.14", default-features = false, features = ["yaml"] }
+config = { version = "0.14", default-features = false, features = [
+    "yaml",
+    "json",
+] }
 
 [build-dependencies]
 tonic-build = "0.12"

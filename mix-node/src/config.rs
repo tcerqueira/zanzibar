@@ -1,3 +1,4 @@
+use elastic_elgamal::{group::Ristretto, sharing::ActiveParticipant};
 use secrecy::Secret;
 use serde_aux::field_attributes::deserialize_number_from_string;
 
@@ -13,6 +14,7 @@ pub struct ApplicationConfig {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub auth_token: Secret<String>,
+    pub participants: Vec<ActiveParticipant<Ristretto>>,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -40,6 +42,9 @@ pub fn get_configuration() -> Result<Config, config::ConfigError> {
     let settings = config::Config::builder()
         .add_source(config::File::from(
             configuration_directory.join("base.yaml"),
+        ))
+        .add_source(config::File::from(
+            configuration_directory.join("participants.json"),
         ))
         .add_source(config::File::from(
             configuration_directory.join(environment_filename),
