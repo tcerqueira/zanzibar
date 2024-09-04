@@ -18,10 +18,15 @@ pub async fn create_app(config: Config) -> TestApp {
     let Config {
         application: app_config,
         database: db_config,
+        ..
     } = config;
-    let auth_token = match app_config.auth_token.expose_secret().as_str() {
-        "" => None,
-        tok => Some(tok.to_owned()),
+    let auth_token = match app_config
+        .auth_token
+        .as_ref()
+        .map(|s| s.expose_secret().as_str())
+    {
+        None | Some("") => None,
+        Some(tok) => Some(tok.to_owned()),
     };
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.unwrap();
@@ -52,10 +57,15 @@ pub async fn create_grpc(config: Config) -> TestApp {
     let Config {
         application: app_config,
         database: db_config,
+        ..
     } = config;
-    let auth_token = match app_config.auth_token.expose_secret().as_str() {
-        "" => None,
-        tok => Some(tok.to_owned()),
+    let auth_token = match app_config
+        .auth_token
+        .as_ref()
+        .map(|s| s.expose_secret().as_str())
+    {
+        None | Some("") => None,
+        Some(tok) => Some(tok.to_owned()),
     };
 
     let listener = tokio::net::TcpListener::bind("[::1]:0").await.unwrap();

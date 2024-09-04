@@ -78,7 +78,7 @@ async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
 #[tokio::test]
 async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
     let mut config = get_configuration()?;
-    config.application.auth_token = Secret::new("test_mix_node_unauthorized".to_string());
+    config.application.auth_token = Some(Secret::new("test_mix_node_unauthorized".to_string()));
     let TestApp { port, .. } = testing::create_app(config).await;
 
     // Bad request + Serialization
@@ -99,7 +99,7 @@ async fn test_mix_node_unauthorized() -> Result<(), Box<dyn Error>> {
 async fn test_mix_node_authorized() -> Result<(), Box<dyn Error>> {
     let auth_token = "test_mix_node_authorized";
     let mut config = get_configuration()?;
-    config.application.auth_token = Secret::new(auth_token.to_string());
+    config.application.auth_token = Some(Secret::new(auth_token.to_string()));
     let TestApp { port, .. } = testing::create_app(config).await;
 
     let (codes, _dec_key) = common::set_up_payload();

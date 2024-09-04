@@ -20,7 +20,8 @@ async fn main() -> Result<(), lambda_http::Error> {
     let Config {
         application: _app_config,
         database: db_config,
-    } = config::get_configuration()?;
+        ..
+    } = config::get_configuration_with(std::env::current_dir()?.join("mix-node").join("config"))?;
 
     let conn = db::connect_database(db_config).await?;
     let state = AppState::new(std::env::var("AUTH_TOKEN").ok(), conn);

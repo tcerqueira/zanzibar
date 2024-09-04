@@ -11,7 +11,7 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, Secret};
 
 #[tracing::instrument(skip_all)]
 pub async fn auth_middleware(
@@ -21,7 +21,7 @@ pub async fn auth_middleware(
     next: Next,
 ) -> Response {
     let fut_next_run = next.run(request);
-    let auth_token = state.auth_token.expose_secret();
+    let auth_token = state.auth_token.as_ref().map(Secret::expose_secret);
 
     match (auth_token, auth_header) {
         // AUTH_TOKEN is set on the server and in the request header so we check

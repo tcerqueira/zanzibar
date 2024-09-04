@@ -1,4 +1,6 @@
-use elastic_elgamal::{group::Ristretto, sharing::ActiveParticipant};
+use std::path::PathBuf;
+
+use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, SecretKey};
 use secrecy::Secret;
 use serde_aux::field_attributes::deserialize_number_from_string;
 
@@ -6,6 +8,7 @@ use serde_aux::field_attributes::deserialize_number_from_string;
 pub struct Config {
     pub application: ApplicationConfig,
     pub database: DatabaseConfig,
+    pub crypto: CryptoConfig,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -13,8 +16,7 @@ pub struct ApplicationConfig {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
-    pub auth_token: Secret<String>,
-    pub participants: Vec<ActiveParticipant<Ristretto>>,
+    pub auth_token: Option<Secret<String>>,
 }
 
 #[derive(serde::Deserialize, Clone)]
@@ -28,9 +30,36 @@ pub struct DatabaseConfig {
     pub require_ssl: bool,
 }
 
+#[derive(serde::Deserialize, Clone)]
+pub struct CryptoConfig {
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub whoami: usize,
+    pub key_set: PublicKeySet<Ristretto>,
+    pub secret_key: SecretKey<Ristretto>,
+    pub participants: Vec<ActiveParticipantConfig>,
+}
+
+#[derive(serde::Deserialize, Clone)]
+pub struct ActiveParticipantConfig {
+    pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub port: u16,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub index: usize,
+}
+
 pub fn get_configuration() -> Result<Config, config::ConfigError> {
     let base_path = std::env::current_dir().expect("Failed to determine the current directory");
     let configuration_directory = base_path.join("config");
+    get_configuration_with(configuration_directory)
+}
+
+pub fn get_configuration_with(
+    configuration_directory: impl Into<PathBuf>,
+) -> Result<Config, config::ConfigError> {
+    // let base_path = std::env::current_dir().expect("Failed to determine the current directory");
+    // let configuration_directory = base_path.join("config");
+    let configuration_directory = configuration_directory.into();
 
     // Detect the running environment.
     // Default to `local` if unspecified.
@@ -44,7 +73,7 @@ pub fn get_configuration() -> Result<Config, config::ConfigError> {
             configuration_directory.join("base.yaml"),
         ))
         .add_source(config::File::from(
-            configuration_directory.join("participants.json"),
+            configuration_directory.join("crypto.json"),
         ))
         .add_source(config::File::from(
             configuration_directory.join(environment_filename),

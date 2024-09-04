@@ -16,14 +16,15 @@ use std::{fmt::Debug, sync::OnceLock};
 pub const N_BITS: usize = 25600;
 
 pub struct AppState {
-    auth_token: Secret<Option<String>>,
+    auth_token: Option<Secret<String>>,
     _pool: PgPool,
+    // participants: Vec<ActiveParticipant<Ristretto>>,
 }
 
 impl AppState {
     pub fn new(auth_token: Option<String>, pool: PgPool) -> Self {
         Self {
-            auth_token: Secret::new(auth_token),
+            auth_token: auth_token.map(Secret::new),
             _pool: pool,
         }
     }

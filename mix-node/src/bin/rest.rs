@@ -15,7 +15,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Config {
         application: app_config,
         database: db_config,
-    } = config::get_configuration()?;
+        ..
+    } = config::get_configuration_with(std::env::current_dir()?.join("mix-node").join("config"))?;
 
     let address = format!("{}:{}", app_config.host, app_config.port);
     let listener = tokio::net::TcpListener::bind(address).await?;

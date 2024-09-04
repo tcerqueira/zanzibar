@@ -9,9 +9,8 @@ pub fn auth_middleware(
     move |req| {
         let auth_token: Option<MetadataValue<_>> = state
             .auth_token
-            .expose_secret()
             .as_ref()
-            .and_then(|token| format!("Bearer {token}").parse().ok());
+            .and_then(|token| format!("Bearer {}", token.expose_secret()).parse().ok());
         let auth_req = req.metadata().get("authorization");
 
         match (auth_token, auth_req) {
