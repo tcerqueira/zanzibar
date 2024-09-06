@@ -5,29 +5,55 @@ pub mod rest;
 pub(crate) mod rokio;
 pub mod testing;
 
-use elastic_elgamal::{group::Ristretto, Ciphertext as ElasticCiphertext, Keypair, PublicKey};
+use config::CryptoConfig;
+use elastic_elgamal::{
+    group::Ristretto, sharing::ActiveParticipant, Ciphertext as ElasticCiphertext, Keypair,
+    PublicKey,
+};
 use rand::{rngs::StdRng, SeedableRng};
 use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
 use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::PgPool;
-use std::{fmt::Debug, sync::OnceLock};
+use std::{
+    fmt::Debug,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+    sync::OnceLock,
+};
 
 pub const N_BITS: usize = 25600;
 
 pub struct AppState {
     auth_token: Option<Secret<String>>,
-    _pool: PgPool,
-    // participants: Vec<ActiveParticipant<Ristretto>>,
+    #[expect(dead_code)]
+    pool: PgPool,
+    #[expect(dead_code)]
+    crypto: CryptoState,
 }
 
 impl AppState {
-    pub fn new(auth_token: Option<String>, pool: PgPool) -> Self {
+    pub fn new(auth_token: Option<String>, pool: PgPool, crypto_config: CryptoConfig) -> Self {
         Self {
             auth_token: auth_token.map(Secret::new),
-            _pool: pool,
+            pool,
+            crypto: crypto_config
+                .try_into()
+                .expect("failed to create active participant from config"),
         }
     }
+}
+
+#[expect(dead_code)]
+pub struct CryptoState {
+    active_particiapnt: ActiveParticipant<Ristretto>,
+    participants: Vec<ParticipantState>,
+}
+
+#[expect(dead_code)]
+struct ParticipantState {
+    index: usize,
+    addr: SocketAddr,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,7 +74,7 @@ pub struct ElasticEncryptedCodes {
     pub enc_key: Option<PublicKey<Ristretto>>,
 }
 
-#[allow(unused)]
+#[expect(dead_code)]
 fn deserialize_vec_with_capacity<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
 where
     D: Deserializer<'de>,
@@ -74,6 +100,39 @@ fn elastic_enc_key() -> &'static PublicKey<Ristretto> {
     static ENC_KEY: OnceLock<PublicKey<Ristretto>> = OnceLock::new();
     ENC_KEY.get_or_init(|| {
         let receiver = Keypair::generate(&mut StdRng::seed_from_u64(1234567890));
-        receiver.public().clone()
+        receiver.into_tuple().0
     })
+}
+
+impl TryFrom<CryptoConfig> for CryptoState {
+    type Error = elastic_elgamal::sharing::Error;
+
+    fn try_from(config: CryptoConfig) -> Result<Self, Self::Error> {
+        let participants = config
+            .participants
+            .iter()
+            .filter(|p| p.index != config.whoami)
+            .map(|p| ParticipantState {
+                index: p.index,
+                addr: SocketAddr::new(
+                    IpAddr::from_str(&p.host).unwrap_or_else(|e| {
+                        panic!(
+                            "{e}: participant {} with host `{}` is not valid",
+                            p.index, p.host
+                        )
+                    }),
+                    p.port,
+                ),
+            })
+            .collect::<Vec<_>>();
+
+        Ok(Self {
+            active_particiapnt: ActiveParticipant::new(
+                config.key_set,
+                config.whoami,
+                config.secret_key,
+            )?,
+            participants,
+        })
+    }
 }

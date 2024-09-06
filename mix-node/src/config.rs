@@ -4,6 +4,7 @@ use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, SecretKey};
 use secrecy::Secret;
 use serde_aux::field_attributes::deserialize_number_from_string;
 
+#[non_exhaustive]
 #[derive(serde::Deserialize, Clone)]
 pub struct Config {
     pub application: ApplicationConfig,
@@ -57,8 +58,6 @@ pub fn get_configuration() -> Result<Config, config::ConfigError> {
 pub fn get_configuration_with(
     configuration_directory: impl Into<PathBuf>,
 ) -> Result<Config, config::ConfigError> {
-    // let base_path = std::env::current_dir().expect("Failed to determine the current directory");
-    // let configuration_directory = base_path.join("config");
     let configuration_directory = configuration_directory.into();
 
     // Detect the running environment.

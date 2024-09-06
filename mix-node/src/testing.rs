@@ -18,6 +18,7 @@ pub async fn create_app(config: Config) -> TestApp {
     let Config {
         application: app_config,
         database: db_config,
+        crypto: crypto_config,
         ..
     } = config;
     let auth_token = match app_config
@@ -41,7 +42,7 @@ pub async fn create_app(config: Config) -> TestApp {
             .await
             .expect("database migration failed");
 
-        let state = AppState::new(auth_token, conn);
+        let state = AppState::new(auth_token, conn, crypto_config);
         axum::serve(listener, crate::rest::app(state))
             .await
             .unwrap();
@@ -57,6 +58,7 @@ pub async fn create_grpc(config: Config) -> TestApp {
     let Config {
         application: app_config,
         database: db_config,
+        crypto: crypto_config,
         ..
     } = config;
     let auth_token = match app_config
@@ -80,7 +82,7 @@ pub async fn create_grpc(config: Config) -> TestApp {
             .await
             .expect("database migration failed");
 
-        let state = AppState::new(auth_token, conn);
+        let state = AppState::new(auth_token, conn, crypto_config);
         let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
         grpc::app(state).serve_with_incoming(stream).await.unwrap();
     });

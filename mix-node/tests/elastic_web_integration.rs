@@ -54,7 +54,8 @@ async fn test_elastic_mix_node() -> Result<(), Box<dyn Error>> {
 
 #[tokio::test]
 async fn test_mix_node_bad_request() -> Result<(), Box<dyn Error>> {
-    let config = get_configuration()?;
+    let mut config = get_configuration()?;
+    config.application.auth_token = None;
     let TestApp { port, .. } = testing::create_app(config).await;
 
     let (mut codes, _dec_key) = common::set_up_elastic_payload();

@@ -3,7 +3,7 @@ application:
   host: 0.0.0.0
   # goes in header `Authorization: Bearer auth_token` of the request
   # override by setting env APP_APPLICATION__AUTH_TOKEN="auth_token"
-  auth_token: "zanzibar"
+  auth_token: ""
 database:
   host: "127.0.0.1"
   port: 5432
