@@ -8,7 +8,7 @@ use elastic_elgamal::{
     group::Ristretto, Ciphertext as ElasticCiphertext, DiscreteLogTable, Keypair, SecretKey,
 };
 use format as f;
-use mix_node::{config::get_configuration, testing, ElasticEncryptedCodes, N_BITS};
+use mix_node::{config::get_configuration, test_helpers, ElasticEncryptedCodes, N_BITS};
 use rand::{rngs::StdRng, SeedableRng};
 use reqwest::Client;
 use std::{ops::Range, sync::Arc};
@@ -54,7 +54,7 @@ fn bench_elastic_mix_node(c: &mut Criterion) {
     let enc_key = receiver.public();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_app(config));
+    let test_app = rt.block_on(test_helpers::create_app(config));
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(ElasticEncryptedCodes {
@@ -68,14 +68,14 @@ fn bench_elastic_mix_node(c: &mut Criterion) {
         concurrent_req: u16,
         port: u16,
         payload: Arc<ElasticEncryptedCodes>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
             let client = Arc::clone(&client);
             let payload = Arc::clone(&payload);
             let handle = tokio::spawn(async move {
                 let _response: ElasticEncryptedCodes = client
-                    .post(format!("http://localhost:{port}/elastic-remix"))
+                    .post(format!("http://localhost:{port}/elastic/remix"))
                     .json(&payload)
                     .send()
                     .await
@@ -135,7 +135,7 @@ fn bench_elastic_mix_node(c: &mut Criterion) {
         concurrent_req: u16,
         port: u16,
         payload: Arc<ElasticEncryptedCodes>,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<usize> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
             let client = Arc::clone(&client);
@@ -147,7 +147,7 @@ fn bench_elastic_mix_node(c: &mut Criterion) {
                     y_code,
                     enc_key: _,
                 } = client
-                    .post(format!("http://localhost:{port}/elastic-remix"))
+                    .post(format!("http://localhost:{port}/elastic/remix"))
                     .json(&payload)
                     .send()
                     .await

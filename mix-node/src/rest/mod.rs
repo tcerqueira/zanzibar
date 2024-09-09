@@ -1,16 +1,28 @@
+pub mod error;
 mod middleware;
-mod routes;
+pub mod routes;
 
 use std::sync::Arc;
 
 use crate::AppState;
-use axum::{extract::DefaultBodyLimit, routing::post, Router};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{get, post},
+    Router,
+};
 use tower_http::trace::TraceLayer;
 
 pub fn app(state: AppState) -> Router {
     let state = Arc::new(state);
+    let elastic_routes = Router::new()
+        .route("/health", get(|| async { "Ok" }))
+        .route("/remix", post(routes::elastic_remix_handler))
+        .route("/public-key-set", get(routes::elastic_public_key))
+        .route("/encrypt", post(routes::elastic_encrypt))
+        .route("/decrypt-share", post(routes::elastic_decrypt_share));
+
     Router::new()
-        .route("/elastic-remix", post(routes::elastic_remix_handler))
+        .nest("/elastic", elastic_routes)
         .route("/remix", post(routes::remix_handler))
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),

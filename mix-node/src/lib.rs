@@ -1,9 +1,10 @@
 pub mod config;
+pub mod crypto;
 pub mod db;
 pub mod grpc;
 pub mod rest;
 pub(crate) mod rokio;
-pub mod testing;
+pub mod test_helpers;
 
 use config::CryptoConfig;
 use elastic_elgamal::{
@@ -28,14 +29,17 @@ pub struct AppState {
     auth_token: Option<Secret<String>>,
     #[expect(dead_code)]
     pool: PgPool,
-    #[expect(dead_code)]
     crypto: CryptoState,
 }
 
 impl AppState {
-    pub fn new(auth_token: Option<String>, pool: PgPool, crypto_config: CryptoConfig) -> Self {
+    pub fn new(
+        auth_token: Option<Secret<String>>,
+        pool: PgPool,
+        crypto_config: CryptoConfig,
+    ) -> Self {
         Self {
-            auth_token: auth_token.map(Secret::new),
+            auth_token,
             pool,
             crypto: crypto_config
                 .try_into()
@@ -44,8 +48,7 @@ impl AppState {
     }
 }
 
-#[expect(dead_code)]
-pub struct CryptoState {
+struct CryptoState {
     active_particiapnt: ActiveParticipant<Ristretto>,
     participants: Vec<ParticipantState>,
 }

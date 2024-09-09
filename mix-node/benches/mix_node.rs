@@ -3,7 +3,7 @@ use format as f;
 use mix_node::{
     config::get_configuration,
     grpc::proto::{self, mix_node_client::MixNodeClient},
-    testing, EncryptedCodes, N_BITS,
+    test_helpers, EncryptedCodes, N_BITS,
 };
 use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
 use reqwest::Client;
@@ -117,7 +117,7 @@ fn bench_requests(c: &mut Criterion) {
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_app(config));
+    let test_app = rt.block_on(test_helpers::create_app(config));
     let client = Arc::new(reqwest::Client::new());
 
     let payload = Arc::new(EncryptedCodes {
@@ -131,7 +131,7 @@ fn bench_requests(c: &mut Criterion) {
         concurrent_req: u16,
         port: u16,
         payload: Arc<EncryptedCodes>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
             let client = Arc::clone(&client);
@@ -204,7 +204,7 @@ fn bench_grpc_requests(c: &mut Criterion) {
     let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(testing::create_grpc(config));
+    let test_app = rt.block_on(test_helpers::create_grpc(config));
     let client = rt
         .block_on(MixNodeClient::connect(format!(
             "http://localhost:{}",
@@ -223,7 +223,7 @@ fn bench_grpc_requests(c: &mut Criterion) {
         client: Arc<MixNodeClient<Channel>>,
         concurrent_req: u16,
         payload: Arc<EncryptedCodes>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> anyhow::Result<()> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
             let mut client = (*client).clone();

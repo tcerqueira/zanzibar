@@ -7,7 +7,7 @@ use mix_node::{
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -23,8 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listener = tokio::net::TcpListener::bind(address).await?;
     let port = listener.local_addr()?.port();
 
-    let conn = db::connect_database(db_config).await?;
-    let state = AppState::new(std::env::var("AUTH_TOKEN").ok(), conn, crypto_config);
+    let conn = db::connect_database(db_config).await;
+    let state = AppState::new(app_config.auth_token, conn, crypto_config);
 
     let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
     tracing::info!("Listening on http://{}:{port}...", app_config.host);

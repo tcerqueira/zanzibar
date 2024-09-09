@@ -18,13 +18,13 @@ async fn main() -> Result<(), lambda_http::Error> {
 
     lambda_http::tracing::init_default_subscriber();
     let Config {
-        application: _app_config,
+        application: app_config,
         database: db_config,
         crypto: crypto_config,
         ..
     } = config::get_configuration_with(std::env::current_dir()?.join("mix-node").join("config"))?;
 
-    let conn = db::connect_database(db_config).await?;
-    let state = AppState::new(std::env::var("AUTH_TOKEN").ok(), conn, crypto_config);
+    let conn = db::connect_database(db_config).await;
+    let state = AppState::new(app_config.auth_token, conn, crypto_config);
     lambda_http::run(rest::app(state)).await
 }
