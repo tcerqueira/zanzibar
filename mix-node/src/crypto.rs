@@ -28,10 +28,12 @@ pub fn decrypt_shares(
     enc: Vec<Ciphertext<Ristretto>>,
     shares: Vec<DecryptionShare>,
 ) -> Option<Vec<u64>> {
-    assert!(!shares.is_empty());
+    if shares.iter().any(|s| s.share.len() != enc.len()) {
+        return None;
+    }
     // Transpose vectors
     let rows = shares.len();
-    let cols = shares[0].share.len();
+    let cols = enc.len();
     let transposed = (0..cols).map(|col| {
         (0..rows)
             .map(|row| (shares[row].index, shares[row].share[col]))
@@ -40,17 +42,17 @@ pub fn decrypt_shares(
 
     transposed
         .zip(enc)
-        .filter_map(|(shares, enc)| {
+        .map(|(shares, enc)| {
             let dec_iter = shares
                 .into_iter()
-                .map(|(i, (share, proof))| {
-                    let share = CandidateDecryption::from_bytes(&share.to_bytes()).unwrap();
-                    key_set.verify_share(share, enc, i, &proof).unwrap()
+                .filter_map(|(i, (share, proof))| {
+                    let share = CandidateDecryption::from_bytes(&share.to_bytes())?;
+                    key_set.verify_share(share, enc, i, &proof).ok()
                 })
                 .enumerate();
-            Some((key_set.params().combine_shares(dec_iter)?, enc))
+            let combined = key_set.params().combine_shares(dec_iter)?;
+            combined.decrypt(enc, &LOOKUP_TABLE)
         })
-        .map(|(combined, enc)| combined.decrypt(enc, &LOOKUP_TABLE))
         .collect::<Option<Vec<_>>>()
 }
 
@@ -59,9 +61,131 @@ mod tests {
     use super::*;
 
     use elastic_elgamal::sharing::{ActiveParticipant, Dealer, Params};
+    use rand::{CryptoRng, Rng};
+
+    fn setup(
+        shares: usize,
+        threshold: usize,
+    ) -> (
+        PublicKeySet<Ristretto>,
+        Dealer<Ristretto>,
+        (impl Rng + CryptoRng),
+    ) {
+        let mut rng = rand::thread_rng();
+        let params = Params::new(shares, threshold);
+
+        // Initialize the dealer.
+        let dealer = Dealer::<Ristretto>::new(params, &mut rng);
+        let (public_poly, poly_proof) = dealer.public_info();
+        (
+            PublicKeySet::new(params, public_poly, poly_proof).unwrap(),
+            dealer,
+            rng,
+        )
+    }
 
     #[test]
     fn test_decrypt_shares() -> anyhow::Result<()> {
+        let (key_set, dealer, mut rng) = setup(3, 2);
+        let plaintext = 5u64;
+        let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
+
+        let shares: Vec<_> = (0..3)
+            .map(|i| {
+                let p = ActiveParticipant::new(
+                    key_set.clone(),
+                    i,
+                    dealer.secret_share_for_participant(i),
+                )
+                .unwrap();
+
+                let share = p.decrypt_share(encrypted, &mut rng);
+                DecryptionShare::new(i, vec![share])
+            })
+            .collect();
+
+        let decrypted = decrypt_shares(key_set, vec![encrypted], shares).unwrap();
+        assert_eq!(decrypted[0], plaintext);
+        Ok(())
+    }
+
+    #[test]
+    fn test_decrypt_empty() -> anyhow::Result<()> {
+        let (key_set, ..) = setup(3, 2);
+
+        let shares: Vec<_> = (0..2).map(|i| DecryptionShare::new(i, vec![])).collect();
+
+        let decrypted = decrypt_shares(key_set, vec![], shares).unwrap();
+        assert!(decrypted.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_decrypt_no_shares() -> anyhow::Result<()> {
+        let (key_set, _dealer, mut rng) = setup(3, 2);
+
+        let plaintext = 5u64;
+        let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
+
+        let decrypted = decrypt_shares(key_set, vec![encrypted], vec![]);
+        assert!(decrypted.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_decrypt_enough_shares() -> anyhow::Result<()> {
+        let (key_set, dealer, mut rng) = setup(3, 2);
+
+        let plaintext = 5u64;
+        let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
+
+        let shares: Vec<_> = (0..2)
+            .map(|i| {
+                let p = ActiveParticipant::new(
+                    key_set.clone(),
+                    i,
+                    dealer.secret_share_for_participant(i),
+                )
+                .unwrap();
+
+                let share = p.decrypt_share(encrypted, &mut rng);
+                DecryptionShare::new(i, vec![share])
+            })
+            .collect();
+
+        let decrypted = decrypt_shares(key_set, vec![encrypted], shares).unwrap();
+        assert_eq!(decrypted[0], plaintext);
+        Ok(())
+    }
+
+    #[test]
+    fn test_decrypt_not_enough_shares() -> anyhow::Result<()> {
+        let (key_set, dealer, mut rng) = setup(3, 2);
+
+        let plaintext = 5u64;
+        let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
+
+        let shares: Vec<_> = (0..1)
+            .map(|i| {
+                let p = ActiveParticipant::new(
+                    key_set.clone(),
+                    i,
+                    dealer.secret_share_for_participant(i),
+                )
+                .unwrap();
+
+                let share = p.decrypt_share(encrypted, &mut rng);
+                DecryptionShare::new(i, vec![share])
+            })
+            .collect();
+
+        let decrypted = decrypt_shares(key_set, vec![encrypted], shares);
+        assert!(decrypted.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_decrypt_mismatch_len() -> anyhow::Result<()> {
         let mut rng = rand::thread_rng();
         let params = Params::new(3, 2);
 
@@ -82,13 +206,13 @@ mod tests {
                 )
                 .unwrap();
 
-                let share = p.decrypt_share(encrypted, &mut rng);
-                DecryptionShare::new(i, vec![share])
+                let _share = p.decrypt_share(encrypted, &mut rng);
+                DecryptionShare::new(i, vec![])
             })
             .collect();
 
-        let decrypted = decrypt_shares(key_set, vec![encrypted], shares).unwrap();
-        assert_eq!(decrypted[0], plaintext);
+        let decrypted = decrypt_shares(key_set, vec![encrypted], shares);
+        assert!(decrypted.is_none());
         Ok(())
     }
 }
