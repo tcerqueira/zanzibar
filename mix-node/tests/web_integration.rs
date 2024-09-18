@@ -1,8 +1,11 @@
 mod common;
 
 use bitvec::prelude::*;
+use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, Ciphertext};
+use format as f;
 use mix_node::{
     config::get_configuration,
+    crypto::{self, DecryptionShare},
     test_helpers::{self, TestApp},
     EncryptedCodes,
 };
@@ -20,7 +23,7 @@ async fn test_mix_node() -> anyhow::Result<()> {
     let config = get_configuration()?;
     let TestApp { port, .. } = test_helpers::create_app(config).await;
 
-    let (codes, dec_key) = common::set_up_payload();
+    let (codes, receiver) = common::set_up_payload();
 
     // Shuffle + Rerandomize + Serialization
     let client = reqwest::Client::new();
@@ -29,7 +32,7 @@ async fn test_mix_node() -> anyhow::Result<()> {
         y_code: enc_archived_user,
         ..
     } = client
-        .post(format!("http://localhost:{port}/remix"))
+        .post(f!("http://localhost:{port}/remix"))
         .json(&codes)
         .send()
         .await?
@@ -37,9 +40,10 @@ async fn test_mix_node() -> anyhow::Result<()> {
         .await?;
 
     // Decrypt
-    let dec_new_user: BitVec<u8, Lsb0> = common::decrypt_bits(&enc_new_user, &dec_key).collect();
+    let dec_new_user: BitVec<u8, Lsb0> =
+        common::decrypt_bits(&enc_new_user, receiver.secret()).collect();
     let dec_archived_user: BitVec<u8, Lsb0> =
-        common::decrypt_bits(&enc_archived_user, &dec_key).collect();
+        common::decrypt_bits(&enc_archived_user, receiver.secret()).collect();
 
     // Assert result
     let hamming_distance = iter::zip(dec_new_user.iter(), dec_archived_user.iter())
@@ -66,7 +70,7 @@ async fn test_mix_node_bad_request() -> anyhow::Result<()> {
     // Bad request + Serialization
     let client = reqwest::Client::new();
     let response = client
-        .post(format!("http://localhost:{port}/remix"))
+        .post(f!("http://localhost:{port}/remix"))
         .json(&codes)
         .send()
         .await?;
@@ -84,15 +88,14 @@ async fn test_mix_node_unauthorized() -> anyhow::Result<()> {
 
     // Bad request + Serialization
     let client = reqwest::Client::new();
-    for route in ["remix", "elastic-remix"] {
-        let response = client
-            .post(format!("http://localhost:{port}/{route}"))
-            .send()
-            .await?;
+    let response = client
+        .post(format!("http://localhost:{port}/remix"))
+        .send()
+        .await?;
 
-        // Assert
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    }
+    // Assert
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
     Ok(())
 }
 
@@ -116,5 +119,87 @@ async fn test_mix_node_authorized() -> anyhow::Result<()> {
 
     // Assert
     assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_mix_node_public_key() -> anyhow::Result<()> {
+    let config = get_configuration()?;
+    let TestApp { port, .. } = test_helpers::create_app(config).await;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(f!("http://localhost:{port}/public-key-set"))
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let _body: PublicKeySet<Ristretto> = response.json().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_mix_node_encrypt() -> anyhow::Result<()> {
+    let config = get_configuration()?;
+    let TestApp { port, .. } = test_helpers::create_app(config).await;
+
+    let payload: Vec<_> = (0..10u64).collect();
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(f!("http://localhost:{port}/encrypt"))
+        .json(&payload)
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body: Vec<Ciphertext<Ristretto>> = response.json().await?;
+
+    assert_eq!(payload.len(), body.len());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_network_of_mix_nodes() -> anyhow::Result<()> {
+    let nodes = test_helpers::create_network(3, 2).await;
+
+    // Request public key
+    let client = reqwest::Client::new();
+    let response = client
+        .get(f!(
+            "http://localhost:{}/public-key-set",
+            nodes[0].port
+        ))
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Encrypt client side
+    let mut rng = rand::thread_rng();
+    let payload: Vec<_> = (0..8u64).collect();
+    let pub_key: PublicKeySet<Ristretto> = response.json().await?;
+    let encrypted: Vec<_> = payload
+        .iter()
+        .map(|pt| pub_key.shared_key().encrypt(*pt, &mut rng))
+        .collect();
+
+    // Decrypt
+    let mut shares = vec![];
+    for TestApp { port, .. } in nodes {
+        let response = client
+            .post(f!("http://localhost:{port}/decrypt-share"))
+            .json(&encrypted)
+            .send()
+            .await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let share: DecryptionShare = response.json().await?;
+        shares.push(share);
+    }
+
+    let decrypted = crypto::decrypt_shares(pub_key, encrypted, shares).expect("failed to decrypt");
+    assert_eq!(payload, decrypted);
     Ok(())
 }

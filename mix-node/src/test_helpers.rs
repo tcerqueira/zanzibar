@@ -1,16 +1,14 @@
 use crate::{
     config::{get_configuration, ActiveParticipantConfig, Config, CryptoConfig},
-    db, grpc, AppState,
+    db, AppState,
 };
 use elastic_elgamal::{
     group::Ristretto,
     sharing::{ActiveParticipant, Dealer, Params, PublicKeySet},
 };
-use rand::{CryptoRng, Rng};
-use rust_elgamal::{DecryptionKey, Scalar, GENERATOR_TABLE};
-use sqlx::PgPool;
 use std::{iter, sync::OnceLock};
 use tokio::task::JoinHandle;
+use tokio_stream::StreamExt;
 
 pub struct TestApp {
     pub port: u16,
@@ -44,37 +42,6 @@ pub async fn create_app(config: Config) -> TestApp {
         axum::serve(listener, crate::rest::app(state))
             .await
             .unwrap();
-    });
-
-    TestApp { port, join_handle }
-}
-
-pub async fn create_grpc(config: Config) -> TestApp {
-    // Only for debugging purposes
-    // init_tracing();
-
-    let Config {
-        application: app_config,
-        database: db_config,
-        crypto: crypto_config,
-        ..
-    } = config;
-
-    let addr = format!("{}:{}", app_config.host, app_config.port);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    let join_handle = tokio::spawn(async move {
-        let conn = db::connect_database(db_config).await;
-        // DB unused at the moment
-        // sqlx::migrate!()
-        //     .run(&conn)
-        //     .await
-        //     .expect("database migration failed");
-
-        let state = AppState::new(app_config.auth_token, conn, crypto_config);
-        let stream = tokio_stream::wrappers::TcpListenerStream::new(listener);
-        grpc::app(state).serve_with_incoming(stream).await.unwrap();
     });
 
     TestApp { port, join_handle }
@@ -130,43 +97,7 @@ pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
         })
         .collect();
 
-    let mut test_apps = vec![];
-    for config in configs {
-        test_apps.push(create_app(config).await);
-    }
-    test_apps
-}
-
-pub async fn populate_database<'p, 'r>(
-    pool: &'p PgPool,
-    rng: &'r mut (impl Rng + CryptoRng),
-    row_count: usize,
-    code_len: usize,
-) -> Result<(), sqlx::Error> {
-    let dec_key = DecryptionKey::new(rng);
-    let enc_key = dec_key.encryption_key();
-
-    let rt = &tokio::runtime::Handle::current();
-    std::thread::scope(|scope| -> Result<_, sqlx::Error> {
-        let mut handles = Vec::with_capacity(row_count);
-        for _i in 0..row_count {
-            let code: Vec<_> = (0..code_len)
-                .map(|_| {
-                    let m = rng.gen_bool(0.5) as u32;
-                    let m = &Scalar::from(m) * &GENERATOR_TABLE;
-                    let r = Scalar::from(123456789u32);
-                    enc_key.encrypt_with(m, r)
-                })
-                .collect();
-            let h = scope.spawn(move || rt.block_on(db::insert_code(pool, &code)));
-            handles.push(h);
-        }
-        for handle in handles {
-            handle.join().unwrap()?;
-        }
-        Ok(())
-    })?;
-    Ok(())
+    tokio_stream::iter(configs).then(create_app).collect().await
 }
 
 #[expect(dead_code)]

@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 rand = "0.8"
 rayon = "1"
-rust-elgamal = "0.4"
 elastic-elgamal = "0.3"
 
 [dev-dependencies]
@@ -17,8 +16,4 @@ criterion = "0.5"
 
 [[bench]]
 name = "remix"
-harness = false
-
-[[bench]]
-name = "elastic_remix"
 harness = false

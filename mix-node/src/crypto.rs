@@ -1,10 +1,9 @@
-use std::sync::LazyLock;
-
 use elastic_elgamal::{
     group::Ristretto, sharing::PublicKeySet, CandidateDecryption, Ciphertext, DiscreteLogTable,
     LogEqualityProof, VerifiableDecryption,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecryptionShare {

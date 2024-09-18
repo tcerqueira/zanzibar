@@ -1,46 +1,15 @@
 use bitvec::prelude::*;
 use elastic_elgamal::{
-    group::Ristretto, Ciphertext as ElasticCiphertext, DiscreteLogTable, Keypair, PublicKey,
-    SecretKey,
+    group::Ristretto, Ciphertext, DiscreteLogTable, Keypair, PublicKey, SecretKey,
 };
-use mix_node::{ElasticEncryptedCodes, EncryptedCodes};
+use mix_node::EncryptedCodes;
 use rand::{CryptoRng, Rng};
-use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::iter;
 
 pub const N_BITS: usize = mix_node::N_BITS / 2;
 
 #[allow(unused)]
-pub fn set_up_payload() -> (EncryptedCodes, DecryptionKey) {
-    let mut rng = rand::thread_rng();
-    let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
-    let archived_iris_code = new_iris_code.clone();
-
-    // Encode bits
-    let mut new_user: BitVec = BitVec::with_capacity(N_BITS * 2);
-    new_user.extend(encode_bits(&new_iris_code[..]));
-    let mut archived_user: BitVec = BitVec::with_capacity(N_BITS * 2);
-    archived_user.extend(encode_bits(&archived_iris_code[..]));
-
-    // Encrypt
-    let dec_key = DecryptionKey::new(&mut rng);
-    let enc_key = dec_key.encryption_key();
-
-    let enc_new_user: Vec<_> = encrypt_bits(&new_user[..], enc_key, &mut rng).collect();
-    let enc_archived_user: Vec<_> = encrypt_bits(&archived_user[..], enc_key, &mut rng).collect();
-
-    (
-        EncryptedCodes {
-            x_code: enc_new_user,
-            y_code: enc_archived_user,
-            enc_key: Some(*enc_key),
-        },
-        dec_key,
-    )
-}
-
-#[allow(unused)]
-pub fn set_up_elastic_payload() -> (ElasticEncryptedCodes, Keypair<Ristretto>) {
+pub fn set_up_payload() -> (EncryptedCodes, Keypair<Ristretto>) {
     let mut rng = rand::thread_rng();
     let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
     let archived_iris_code = new_iris_code.clone();
@@ -56,12 +25,11 @@ pub fn set_up_elastic_payload() -> (ElasticEncryptedCodes, Keypair<Ristretto>) {
     let dec_key = receiver.secret().clone();
     let enc_key = receiver.public().clone();
 
-    let enc_new_user: Vec<_> = elastic_encrypt_bits(&new_user[..], &enc_key, &mut rng).collect();
-    let enc_archived_user: Vec<_> =
-        elastic_encrypt_bits(&archived_user[..], &enc_key, &mut rng).collect();
+    let enc_new_user: Vec<_> = encrypt_bits(&new_user[..], &enc_key, &mut rng).collect();
+    let enc_archived_user: Vec<_> = encrypt_bits(&archived_user[..], &enc_key, &mut rng).collect();
 
     (
-        ElasticEncryptedCodes {
+        EncryptedCodes {
             x_code: enc_new_user,
             y_code: enc_archived_user,
             enc_key: Some(enc_key),
@@ -100,36 +68,15 @@ pub fn decode_bits<T: BitStore, O: BitOrder>(
 #[allow(unused)]
 pub fn encrypt_bits<'a, T: BitStore, O: BitOrder>(
     bits: &'a BitSlice<T, O>,
-    ek: &'a EncryptionKey,
-    rng: &'a mut (impl Rng + CryptoRng + 'static),
-) -> impl Iterator<Item = Ciphertext> + 'a {
-    bits.iter()
-        .map(|bit| ek.encrypt(&Scalar::from(*bit as u32) * &GENERATOR_TABLE, rng))
-}
-
-#[allow(unused)]
-pub fn decrypt_bits<'a>(
-    ct: &'a [Ciphertext],
-    pk: &'a DecryptionKey,
-) -> impl Iterator<Item = bool> + 'a {
-    ct.iter().map(|ct| {
-        let point = pk.decrypt(*ct);
-        point != (&Scalar::from(0u32) * &GENERATOR_TABLE)
-    })
-}
-
-#[allow(unused)]
-pub fn elastic_encrypt_bits<'a, T: BitStore, O: BitOrder>(
-    bits: &'a BitSlice<T, O>,
     ek: &'a PublicKey<Ristretto>,
     rng: &'a mut (impl Rng + CryptoRng + 'static),
-) -> impl Iterator<Item = ElasticCiphertext<Ristretto>> + 'a {
+) -> impl Iterator<Item = Ciphertext<Ristretto>> + 'a {
     bits.iter().map(|bit| ek.encrypt(*bit as u32, rng))
 }
 
 #[allow(unused)]
-pub fn elastic_decrypt_bits<'a>(
-    ct: &'a [ElasticCiphertext<Ristretto>],
+pub fn decrypt_bits<'a>(
+    ct: &'a [Ciphertext<Ristretto>],
     pk: &'a SecretKey<Ristretto>,
 ) -> impl Iterator<Item = bool> + 'a {
     ct.iter().map(|ct| {

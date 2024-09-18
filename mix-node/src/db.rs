@@ -1,6 +1,5 @@
 use crate::config::DatabaseConfig;
-use elastic_elgamal::{group::Ristretto, Ciphertext as ElasticCiphertext};
-use rust_elgamal::Ciphertext;
+use elastic_elgamal::{group::Ristretto, Ciphertext};
 use secrecy::ExposeSecret;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions, PgQueryResult, PgSslMode},
@@ -24,19 +23,11 @@ pub async fn connect_database(config: DatabaseConfig) -> PgPool {
     pool_options.connect_lazy_with(conn_options)
 }
 
-pub async fn insert_code(pool: &PgPool, code: &[Ciphertext]) -> Result<PgQueryResult, Error> {
-    let code = bincode::serialize(code).expect("failed to serialize code");
-    sqlx::query("INSERT INTO iris (code) VALUES ($1);")
-        .bind(code)
-        .execute(pool)
-        .await
-}
-
 pub async fn elastic_insert_code(
     pool: &PgPool,
-    code: &[ElasticCiphertext<Ristretto>],
+    code: &[Ciphertext<Ristretto>],
 ) -> Result<PgQueryResult, Error> {
-    let code = code.iter().flat_map(|ct| ct.to_bytes()).collect::<Vec<_>>();
+    let code = bincode::serialize(code).expect("failed to serialize code");
     sqlx::query("INSERT INTO iris (code) VALUES ($1);")
         .bind(code)
         .execute(pool)

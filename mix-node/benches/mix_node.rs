@@ -1,15 +1,16 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use format as f;
-use mix_node::{
-    config::get_configuration,
-    grpc::proto::{self, mix_node_client::MixNodeClient},
-    test_helpers, EncryptedCodes, N_BITS,
+use bitvec::{
+    order::{BitOrder, Lsb0},
+    store::BitStore,
+    vec::BitVec,
 };
-use rand::{rngs::StdRng, CryptoRng, Rng, SeedableRng};
+use criterion::{criterion_group, criterion_main, Criterion};
+use elastic_elgamal::{group::Ristretto, Ciphertext, DiscreteLogTable, Keypair, SecretKey};
+use format as f;
+use mix_node::{config::get_configuration_with, test_helpers, EncryptedCodes, N_BITS};
+use rand::{rngs::StdRng, SeedableRng};
 use reqwest::Client;
-use rust_elgamal::{Ciphertext, DecryptionKey, EncryptionKey, Scalar, GENERATOR_TABLE};
 use std::{ops::Range, sync::Arc};
-use tonic::transport::Channel;
+use tokio_stream::StreamExt;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -17,104 +18,39 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 const N_SMALL_BITS: usize = 10;
 const N_THREADS: u16 = 11;
 
-fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, (impl Rng + CryptoRng)) {
+fn setup_bench() -> (
+    Vec<Ciphertext<Ristretto>>,
+    Vec<Ciphertext<Ristretto>>,
+    Keypair<Ristretto>,
+) {
     let mut rng = StdRng::seed_from_u64(7);
-    let dec_key = DecryptionKey::new(&mut rng);
-    let enc_key = dec_key.encryption_key();
+    let receiver = Keypair::generate(&mut rng);
+    let enc_key = receiver.public();
 
-    let mut encrypt = |i: usize| -> Ciphertext {
-        let m = &Scalar::from((i % 2) as u32) * &GENERATOR_TABLE;
-        enc_key.encrypt(m, &mut rng)
-    };
+    let mut encrypt =
+        |i: usize| -> Ciphertext<Ristretto> { enc_key.encrypt((i % 2) as u32, &mut rng) };
     let ct1: Vec<_> = (0..N_BITS).map(&mut encrypt).collect();
     let ct2: Vec<_> = (0..N_BITS).map(&mut encrypt).collect();
 
-    (ct1, ct2, rng)
+    (ct1, ct2, receiver)
 }
 
 fn payload_subset(codes: &EncryptedCodes, range: Range<usize>) -> EncryptedCodes {
     EncryptedCodes {
         x_code: codes.x_code[range.clone()].to_vec(),
         y_code: codes.y_code[range].to_vec(),
-        enc_key: codes.enc_key,
+        enc_key: codes.enc_key.clone(),
     }
 }
 
-fn bench_serialization_json(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Serialize json");
-
-    let (ct1, ct2, mut rng) = setup_bench();
-    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
-
-    let payload = EncryptedCodes {
-        x_code: ct1,
-        y_code: ct2,
-        enc_key: Some(enc_key),
-    };
-
-    group.bench_function("to string", |b| {
-        b.iter(|| {
-            let _string = serde_json::to_string(&payload);
-        })
-    });
-
-    group.bench_function("to value", |b| {
-        b.iter(|| {
-            let _value = serde_json::to_value(&payload);
-        })
-    });
-
-    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
-
-    group.bench_function(f!("to string {N_SMALL_BITS} bits subset"), |b| {
-        b.iter(|| {
-            let _string = serde_json::to_string(&payload);
-        })
-    });
-
-    group.bench_function(f!("to value {N_SMALL_BITS} bits subset"), |b| {
-        b.iter(|| {
-            let _value = serde_json::to_value(&payload);
-        })
-    });
-}
-
-fn bench_deserialization_json(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Deserialize json");
-
-    let (ct1, ct2, mut rng) = setup_bench();
-    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
-
-    let payload = EncryptedCodes {
-        x_code: ct1,
-        y_code: ct2,
-        enc_key: Some(enc_key),
-    };
-    let payload_str = serde_json::to_string(&payload).unwrap();
-
-    group.bench_function("from string", |b| {
-        b.iter(|| {
-            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
-        })
-    });
-
-    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
-    let payload_str = serde_json::to_string(&payload).unwrap();
-
-    group.bench_function(f!("from string {N_SMALL_BITS} bits subset"), |b| {
-        b.iter(|| {
-            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
-        })
-    });
-}
-
-fn bench_requests(c: &mut Criterion) {
+fn bench_mix_node(c: &mut Criterion) {
     let mut group = c.benchmark_group("Request");
     group.sample_size(20);
 
-    let config = get_configuration().unwrap();
-    let (ct1, ct2, mut rng) = setup_bench();
-    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
+    let curr_dir = std::env::current_dir().unwrap();
+    let config = get_configuration_with(curr_dir.join("config")).unwrap();
+    let (ct1, ct2, receiver) = setup_bench();
+    let enc_key = receiver.public();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let test_app = rt.block_on(test_helpers::create_app(config));
@@ -123,7 +59,7 @@ fn bench_requests(c: &mut Criterion) {
     let payload = Arc::new(EncryptedCodes {
         x_code: ct1,
         y_code: ct2,
-        enc_key: Some(enc_key),
+        enc_key: Some(enc_key.clone()),
     });
 
     async fn bench_fn(
@@ -192,93 +128,153 @@ fn bench_requests(c: &mut Criterion) {
         })
     });
 
-    test_app.join_handle.abort();
-}
-
-fn bench_grpc_requests(c: &mut Criterion) {
-    let mut group = c.benchmark_group("gRPC request");
-    group.sample_size(20);
-
-    let config = get_configuration().unwrap();
-    let (ct1, ct2, mut rng) = setup_bench();
-    let enc_key = EncryptionKey::from(&Scalar::random(&mut rng) * &GENERATOR_TABLE);
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let test_app = rt.block_on(test_helpers::create_grpc(config));
-    let client = rt
-        .block_on(MixNodeClient::connect(format!(
-            "http://localhost:{}",
-            test_app.port
-        )))
-        .unwrap();
-    let client = Arc::new(client);
-
-    let payload = Arc::new(EncryptedCodes {
-        x_code: ct1,
-        y_code: ct2,
-        enc_key: Some(enc_key),
-    });
-
-    async fn bench_fn(
-        client: Arc<MixNodeClient<Channel>>,
+    async fn bench_final_fn(
+        client: Arc<Client>,
+        dec_key: &SecretKey<Ristretto>,
         concurrent_req: u16,
+        port: u16,
         payload: Arc<EncryptedCodes>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<usize> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
-            let mut client = (*client).clone();
+            let client = Arc::clone(&client);
             let payload = Arc::clone(&payload);
+            let dec_key = dec_key.clone();
             let handle = tokio::spawn(async move {
-                let proto_codes: proto::EncryptedCodes = (&*payload).into();
-                let _response: EncryptedCodes = client
-                    .remix(proto_codes)
+                let EncryptedCodes {
+                    x_code,
+                    y_code,
+                    enc_key: _,
+                } = client
+                    .post(format!("http://localhost:{port}/remix"))
+                    .json(&payload)
+                    .send()
                     .await
                     .unwrap()
-                    .into_inner()
-                    .try_into()
+                    .json()
+                    .await
                     .unwrap();
+                let x_bits: BitVec<usize, Lsb0> =
+                    BitVec::from_iter(decrypt_bits(&x_code, &dec_key));
+                let y_bits: BitVec<usize, Lsb0> =
+                    BitVec::from_iter(decrypt_bits(&y_code, &dec_key));
+
+                hamming_distance(x_bits, y_bits) > 8
             });
 
             join_handles.push(handle);
         }
 
-        for handle in join_handles {
-            let _ = handle.await;
-        }
+        let count = tokio_stream::iter(join_handles)
+            .then(|handle| async move { handle.await.unwrap() })
+            .filter(|&is_same| is_same)
+            .fold(0, |acc, _| acc + 1)
+            .await;
 
-        Ok(())
+        Ok(count)
     }
 
-    group.bench_function("one request", |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
-    });
-
-    group.bench_function(f!("{N_THREADS} parallel"), |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), N_THREADS, Arc::clone(&payload)))
-    });
-
-    let payload = Arc::new(payload_subset(&payload, 0..N_SMALL_BITS));
-
-    group.bench_function(f!("one request {N_SMALL_BITS} bits subset"), |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 1, Arc::clone(&payload)))
-    });
-
-    group.bench_function(f!("{N_THREADS} parallel {N_SMALL_BITS} bits subset"), |b| {
-        b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), N_THREADS, Arc::clone(&payload)))
+    group.bench_function("final send+remix+receive+decrypt+hamming", |b| {
+        b.to_async(&rt).iter(|| {
+            bench_final_fn(
+                Arc::clone(&client),
+                receiver.secret(),
+                N_THREADS,
+                test_app.port,
+                Arc::clone(&payload),
+            )
+        })
     });
 
     test_app.join_handle.abort();
 }
 
+fn bench_serialization_json(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Serialize json");
+
+    let (ct1, ct2, receiver) = setup_bench();
+    let enc_key = receiver.public();
+
+    let payload = EncryptedCodes {
+        x_code: ct1,
+        y_code: ct2,
+        enc_key: Some(enc_key.clone()),
+    };
+
+    group.bench_function("to string", |b| {
+        b.iter(|| {
+            let _string = serde_json::to_string(&payload);
+        })
+    });
+
+    group.bench_function("to value", |b| {
+        b.iter(|| {
+            let _value = serde_json::to_value(&payload);
+        })
+    });
+
+    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
+
+    group.bench_function(f!("to string {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _string = serde_json::to_string(&payload);
+        })
+    });
+
+    group.bench_function(f!("to value {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _value = serde_json::to_value(&payload);
+        })
+    });
+}
+
+fn bench_deserialization_json(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Deserialize json");
+
+    let (ct1, ct2, receiver) = setup_bench();
+    let enc_key = receiver.public();
+
+    let payload = EncryptedCodes {
+        x_code: ct1,
+        y_code: ct2,
+        enc_key: Some(enc_key.clone()),
+    };
+    let payload_str = serde_json::to_string(&payload).unwrap();
+
+    group.bench_function("from string", |b| {
+        b.iter(|| {
+            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
+        })
+    });
+
+    let payload = payload_subset(&payload, 0..N_SMALL_BITS);
+    let payload_str = serde_json::to_string(&payload).unwrap();
+
+    group.bench_function(f!("from string {N_SMALL_BITS} bits subset"), |b| {
+        b.iter(|| {
+            let _value: EncryptedCodes = serde_json::from_str(&payload_str).unwrap();
+        })
+    });
+}
+
+fn hamming_distance<T: BitStore, O: BitOrder>(bv1: BitVec<T, O>, bv2: BitVec<T, O>) -> usize {
+    (bv1 ^ bv2).count_ones()
+}
+
+pub fn decrypt_bits<'a>(
+    ct: &'a [Ciphertext<Ristretto>],
+    pk: &'a SecretKey<Ristretto>,
+) -> impl Iterator<Item = bool> + 'a {
+    ct.iter().map(|ct| {
+        let point = pk.decrypt(*ct, &DiscreteLogTable::new(0..2)).unwrap();
+        point != 0u64
+    })
+}
+
 criterion_group!(
     benches,
+    bench_mix_node,
     bench_serialization_json,
-    bench_deserialization_json,
-    bench_requests,
-    bench_grpc_requests,
+    bench_deserialization_json
 );
 criterion_main!(benches);

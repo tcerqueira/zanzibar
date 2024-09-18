@@ -1,18 +1,15 @@
 pub mod config;
 pub mod crypto;
 pub mod db;
-pub mod grpc;
 pub mod rest;
 pub(crate) mod rokio;
 pub mod test_helpers;
 
 use config::CryptoConfig;
 use elastic_elgamal::{
-    group::Ristretto, sharing::ActiveParticipant, Ciphertext as ElasticCiphertext, Keypair,
-    PublicKey,
+    group::Ristretto, sharing::ActiveParticipant, Ciphertext, Keypair, PublicKey,
 };
 use rand::{rngs::StdRng, SeedableRng};
-use rust_elgamal::{Ciphertext, EncryptionKey, RistrettoPoint};
 use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::PgPool;
@@ -62,18 +59,9 @@ struct ParticipantState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedCodes {
     // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub x_code: Vec<Ciphertext>,
+    pub x_code: Vec<Ciphertext<Ristretto>>,
     // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub y_code: Vec<Ciphertext>,
-    pub enc_key: Option<EncryptionKey>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ElasticEncryptedCodes {
-    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub x_code: Vec<ElasticCiphertext<Ristretto>>,
-    // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub y_code: Vec<ElasticCiphertext<Ristretto>>,
+    pub y_code: Vec<Ciphertext<Ristretto>>,
     pub enc_key: Option<PublicKey<Ristretto>>,
 }
 
@@ -88,17 +76,7 @@ where
     Ok(vec)
 }
 
-fn enc_key() -> &'static EncryptionKey {
-    // TODO: remove hardcoded encryption key from a fixed seed
-    static ENC_KEY: OnceLock<EncryptionKey> = OnceLock::new();
-    ENC_KEY.get_or_init(|| {
-        EncryptionKey::from(RistrettoPoint::random(&mut StdRng::seed_from_u64(
-            1234567890,
-        )))
-    })
-}
-
-fn elastic_enc_key() -> &'static PublicKey<Ristretto> {
+fn enc_key() -> &'static PublicKey<Ristretto> {
     // TODO: remove hardcoded encryption key from a fixed seed
     static ENC_KEY: OnceLock<PublicKey<Ristretto>> = OnceLock::new();
     ENC_KEY.get_or_init(|| {

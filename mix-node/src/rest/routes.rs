@@ -1,5 +1,5 @@
 use super::error::Error;
-use crate::{crypto::DecryptionShare, rokio, AppState, ElasticEncryptedCodes, EncryptedCodes};
+use crate::{crypto::DecryptionShare, rokio, AppState, EncryptedCodes};
 use anyhow::Context;
 use axum::{extract::State, response::Json};
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, Ciphertext};
@@ -38,46 +38,13 @@ pub async fn remix_handler(
     Ok(Json(codes))
 }
 
-#[tracing::instrument(
-        skip(_state, codes),
-        fields(
-            x_code.len = codes.x_code.len(),
-            y_code.len = codes.y_code.len(),
-            enc_key = ?codes.enc_key,
-        )
-    )]
-pub async fn elastic_remix_handler(
-    State(_state): State<Arc<AppState>>,
-    Json(mut codes): Json<ElasticEncryptedCodes>,
-) -> Result<Json<ElasticEncryptedCodes>, Error> {
-    if codes.x_code.len() != codes.y_code.len() {
-        return Err(Error::InvalidLength(
-            "Codes have mismatched lengths.".to_owned(),
-        ));
-    }
-
-    let codes = rokio::spawn(move || {
-        remix::elastic::remix(
-            &mut codes.x_code,
-            &mut codes.y_code,
-            codes.enc_key.as_ref().unwrap_or(crate::elastic_enc_key()),
-        );
-        codes
-    })
-    .await;
-
-    Ok(Json(codes))
-}
-
 #[tracing::instrument(skip(state))]
-pub async fn elastic_public_key(
-    State(state): State<Arc<AppState>>,
-) -> Json<PublicKeySet<Ristretto>> {
+pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKeySet<Ristretto>> {
     Json(state.crypto.active_particiapnt.key_set().clone())
 }
 
 #[tracing::instrument(skip(state, plaintext))]
-pub async fn elastic_encrypt(
+pub async fn encrypt(
     State(state): State<Arc<AppState>>,
     Json(plaintext): Json<Vec<u64>>,
 ) -> Json<Vec<Ciphertext<Ristretto>>> {
@@ -97,7 +64,7 @@ pub async fn elastic_encrypt(
 }
 
 #[tracing::instrument(skip(state))]
-pub async fn elastic_decrypt(
+pub async fn decrypt(
     State(state): State<Arc<AppState>>,
     Json(ciphertext): Json<Vec<Ciphertext<Ristretto>>>,
 ) -> Json<Vec<DecryptionShare>> {
@@ -117,7 +84,7 @@ pub async fn elastic_decrypt(
         }
     }
     // ???: doesnt seem right
-    let Json(my_share) = elastic_decrypt_share(State(state), Json(ciphertext)).await;
+    let Json(my_share) = decrypt_share(State(state), Json(ciphertext)).await;
     dec_shares.push(my_share);
 
     Json(dec_shares)
@@ -136,11 +103,11 @@ async fn request_share(
         .with_context(|| format!("request to '{url}' failed"))?
         .json()
         .await
-        .context("expected Vec of shares")
+        .context("expected array of shares")
 }
 
 #[tracing::instrument(skip(state))]
-pub async fn elastic_decrypt_share(
+pub async fn decrypt_share(
     State(state): State<Arc<AppState>>,
     Json(ciphertext): Json<Vec<Ciphertext<Ristretto>>>,
 ) -> Json<DecryptionShare> {
