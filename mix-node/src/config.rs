@@ -42,9 +42,7 @@ pub struct CryptoConfig {
 
 #[derive(serde::Deserialize, Clone)]
 pub struct ActiveParticipantConfig {
-    pub host: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
+    pub url: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub index: usize,
 }

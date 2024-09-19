@@ -13,12 +13,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::PgPool;
-use std::{
-    fmt::Debug,
-    net::{IpAddr, SocketAddr},
-    str::FromStr,
-    sync::OnceLock,
-};
+use std::{fmt::Debug, sync::OnceLock};
 
 pub const N_BITS: usize = 25600;
 
@@ -53,7 +48,7 @@ struct CryptoState {
 #[expect(dead_code)]
 struct ParticipantState {
     index: usize,
-    addr: SocketAddr,
+    url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,19 +86,11 @@ impl TryFrom<CryptoConfig> for CryptoState {
     fn try_from(config: CryptoConfig) -> Result<Self, Self::Error> {
         let participants = config
             .participants
-            .iter()
+            .into_iter()
             .filter(|p| p.index != config.whoami)
             .map(|p| ParticipantState {
                 index: p.index,
-                addr: SocketAddr::new(
-                    IpAddr::from_str(&p.host).unwrap_or_else(|e| {
-                        panic!(
-                            "{e}: participant {} with host `{}` is not valid",
-                            p.index, p.host
-                        )
-                    }),
-                    p.port,
-                ),
+                url: p.url,
             })
             .collect::<Vec<_>>();
 

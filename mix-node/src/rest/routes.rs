@@ -73,7 +73,7 @@ pub async fn decrypt(
     for p in state.crypto.participants.iter() {
         // TODO: Use URL for participants
         let protocol = "http";
-        let url = format!("{}://{}/elastic/decrypt-share", protocol, p.addr);
+        let url = format!("{}://{}/elastic/decrypt-share", protocol, p.url);
         // TODO: parallelize this
         match request_share(&client, &url, &ciphertext).await {
             Ok(share) => dec_shares.push(share),

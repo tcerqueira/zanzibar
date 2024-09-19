@@ -67,8 +67,7 @@ pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
     let participant_configs: Vec<_> = participants
         .iter()
         .map(|p| ActiveParticipantConfig {
-            host: "0.0.0.0".to_string(),
-            port: STARTING_PORT + p.index() as u16,
+            url: format!("localhost:{}", STARTING_PORT + p.index() as u16),
             index: p.index(),
         })
         .collect();
@@ -91,8 +90,9 @@ pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
         .map(|(crypto_conf, p)| {
             let mut config = get_configuration().expect("could not get valid configuration");
             config.crypto = crypto_conf;
-            config.application.host = p.host;
-            config.application.port = p.port;
+            let mut split = p.url.split(':');
+            config.application.host = split.next().unwrap().to_owned();
+            config.application.port = split.next().unwrap().parse::<u16>().unwrap();
             config
         })
         .collect();
