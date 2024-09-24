@@ -4,9 +4,11 @@ use bitvec::{
     vec::BitVec,
 };
 use criterion::{criterion_group, criterion_main, Criterion};
-use elastic_elgamal::{group::Ristretto, Ciphertext, DiscreteLogTable, Keypair, SecretKey};
+use elastic_elgamal::{group::Ristretto, DiscreteLogTable, Keypair, SecretKey};
 use format as f;
-use mix_node::{config::get_configuration_with, test_helpers, EncryptedCodes, N_BITS};
+use mix_node::{
+    config::get_configuration_with, crypto::Ciphertext, test_helpers, EncryptedCodes, N_BITS,
+};
 use rand::{rngs::StdRng, SeedableRng};
 use reqwest::Client;
 use std::{ops::Range, sync::Arc};
@@ -18,17 +20,12 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 const N_SMALL_BITS: usize = 10;
 const N_THREADS: u16 = 11;
 
-fn setup_bench() -> (
-    Vec<Ciphertext<Ristretto>>,
-    Vec<Ciphertext<Ristretto>>,
-    Keypair<Ristretto>,
-) {
+fn setup_bench() -> (Vec<Ciphertext>, Vec<Ciphertext>, Keypair<Ristretto>) {
     let mut rng = StdRng::seed_from_u64(7);
     let receiver = Keypair::generate(&mut rng);
     let enc_key = receiver.public();
 
-    let mut encrypt =
-        |i: usize| -> Ciphertext<Ristretto> { enc_key.encrypt((i % 2) as u32, &mut rng) };
+    let mut encrypt = |i: usize| -> Ciphertext { enc_key.encrypt((i % 2) as u32, &mut rng) };
     let ct1: Vec<_> = (0..N_BITS).map(&mut encrypt).collect();
     let ct2: Vec<_> = (0..N_BITS).map(&mut encrypt).collect();
 
@@ -262,7 +259,7 @@ fn hamming_distance<T: BitStore, O: BitOrder>(bv1: BitVec<T, O>, bv2: BitVec<T, 
 }
 
 pub fn decrypt_bits<'a>(
-    ct: &'a [Ciphertext<Ristretto>],
+    ct: &'a [Ciphertext],
     pk: &'a SecretKey<Ristretto>,
 ) -> impl Iterator<Item = bool> + 'a {
     ct.iter().map(|ct| {

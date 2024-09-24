@@ -1,8 +1,6 @@
 use bitvec::prelude::*;
-use elastic_elgamal::{
-    group::Ristretto, Ciphertext, DiscreteLogTable, Keypair, PublicKey, SecretKey,
-};
-use mix_node::EncryptedCodes;
+use elastic_elgamal::{group::Ristretto, DiscreteLogTable, Keypair, PublicKey, SecretKey};
+use mix_node::{crypto::Ciphertext, EncryptedCodes};
 use rand::{CryptoRng, Rng};
 use std::iter;
 
@@ -70,13 +68,13 @@ pub fn encrypt_bits<'a, T: BitStore, O: BitOrder>(
     bits: &'a BitSlice<T, O>,
     ek: &'a PublicKey<Ristretto>,
     rng: &'a mut (impl Rng + CryptoRng + 'static),
-) -> impl Iterator<Item = Ciphertext<Ristretto>> + 'a {
+) -> impl Iterator<Item = Ciphertext> + 'a {
     bits.iter().map(|bit| ek.encrypt(*bit as u32, rng))
 }
 
 #[allow(unused)]
 pub fn decrypt_bits<'a>(
-    ct: &'a [Ciphertext<Ristretto>],
+    ct: &'a [Ciphertext],
     pk: &'a SecretKey<Ristretto>,
 ) -> impl Iterator<Item = bool> + 'a {
     ct.iter().map(|ct| {

@@ -1,9 +1,11 @@
 use elastic_elgamal::{
-    group::Ristretto, sharing::PublicKeySet, CandidateDecryption, Ciphertext, DiscreteLogTable,
+    group::Ristretto, sharing::PublicKeySet, CandidateDecryption, DiscreteLogTable,
     LogEqualityProof, VerifiableDecryption,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
+
+pub type Ciphertext = elastic_elgamal::Ciphertext<Ristretto>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecryptionShare {
@@ -25,7 +27,7 @@ pub static LOOKUP_TABLE: LazyLock<DiscreteLogTable<Ristretto>> =
 
 pub fn decrypt_shares(
     key_set: PublicKeySet<Ristretto>,
-    enc: Vec<Ciphertext<Ristretto>>,
+    enc: Vec<Ciphertext>,
     shares: Vec<DecryptionShare>,
 ) -> Option<Vec<u64>> {
     if shares.iter().any(|s| s.share.len() != enc.len()) {

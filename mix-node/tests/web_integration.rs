@@ -168,10 +168,7 @@ async fn test_network_of_mix_nodes() -> anyhow::Result<()> {
     // Request public key
     let client = reqwest::Client::new();
     let response = client
-        .get(f!(
-            "http://localhost:{}/public-key-set",
-            nodes[0].port
-        ))
+        .get(f!("http://localhost:{}/public-key-set", nodes[0].port))
         .send()
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
@@ -187,7 +184,7 @@ async fn test_network_of_mix_nodes() -> anyhow::Result<()> {
 
     // Decrypt
     let mut shares = vec![];
-    for TestApp { port, .. } in nodes {
+    for TestApp { port, .. } in nodes.into_iter().take(2) {
         let response = client
             .post(f!("http://localhost:{port}/decrypt-share"))
             .json(&encrypted)

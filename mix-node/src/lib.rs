@@ -6,9 +6,8 @@ pub(crate) mod rokio;
 pub mod test_helpers;
 
 use config::CryptoConfig;
-use elastic_elgamal::{
-    group::Ristretto, sharing::ActiveParticipant, Ciphertext, Keypair, PublicKey,
-};
+use crypto::Ciphertext;
+use elastic_elgamal::{group::Ristretto, sharing::ActiveParticipant, Keypair, PublicKey};
 use rand::{rngs::StdRng, SeedableRng};
 use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -54,9 +53,9 @@ struct ParticipantState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedCodes {
     // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub x_code: Vec<Ciphertext<Ristretto>>,
+    pub x_code: Vec<Ciphertext>,
     // #[serde(deserialize_with = "deserialize_vec_with_capacity")]
-    pub y_code: Vec<Ciphertext<Ristretto>>,
+    pub y_code: Vec<Ciphertext>,
     pub enc_key: Option<PublicKey<Ristretto>>,
 }
 

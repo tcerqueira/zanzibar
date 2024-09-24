@@ -1,8 +1,11 @@
 use super::error::Error;
-use crate::{crypto::DecryptionShare, rokio, AppState, EncryptedCodes};
+use crate::{
+    crypto::{Ciphertext, DecryptionShare},
+    rokio, AppState, EncryptedCodes,
+};
 use anyhow::Context;
 use axum::{extract::State, response::Json};
-use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, Ciphertext};
+use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet};
 use rayon::prelude::*;
 use reqwest::Client;
 use std::sync::Arc;
@@ -47,7 +50,7 @@ pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKe
 pub async fn encrypt(
     State(state): State<Arc<AppState>>,
     Json(plaintext): Json<Vec<u64>>,
-) -> Json<Vec<Ciphertext<Ristretto>>> {
+) -> Json<Vec<Ciphertext>> {
     let ciphertexts = rokio::spawn(move || {
         let pub_key = state.crypto.active_particiapnt.key_set().shared_key();
         plaintext
@@ -66,7 +69,7 @@ pub async fn encrypt(
 #[tracing::instrument(skip(state))]
 pub async fn decrypt(
     State(state): State<Arc<AppState>>,
-    Json(ciphertext): Json<Vec<Ciphertext<Ristretto>>>,
+    Json(ciphertext): Json<Vec<Ciphertext>>,
 ) -> Json<Vec<DecryptionShare>> {
     let client = reqwest::Client::new();
     let mut dec_shares = vec![];
@@ -90,10 +93,17 @@ pub async fn decrypt(
     Json(dec_shares)
 }
 
+pub async fn hamming_distance(
+    State(_state): State<Arc<AppState>>,
+    Json(_codes): Json<EncryptedCodes>,
+) -> Result<Json<usize>, Error> {
+    todo!()
+}
+
 async fn request_share(
     client: &Client,
     url: &str,
-    ciphertext: &Vec<Ciphertext<Ristretto>>,
+    ciphertext: &Vec<Ciphertext>,
 ) -> anyhow::Result<DecryptionShare> {
     client
         .post(url)
@@ -103,13 +113,13 @@ async fn request_share(
         .with_context(|| format!("request to '{url}' failed"))?
         .json()
         .await
-        .context("expected array of shares")
+        .context("could not deserialize decryption share")
 }
 
 #[tracing::instrument(skip(state))]
 pub async fn decrypt_share(
     State(state): State<Arc<AppState>>,
-    Json(ciphertext): Json<Vec<Ciphertext<Ristretto>>>,
+    Json(ciphertext): Json<Vec<Ciphertext>>,
 ) -> Json<DecryptionShare> {
     let share = rokio::spawn(move || {
         let active_participant = &state.crypto.active_particiapnt;
