@@ -1,6 +1,6 @@
 use super::error::Error;
 use crate::{
-    crypto::{Ciphertext, DecryptionShare},
+    crypto::{self, Ciphertext, CryptoError, DecryptionShare},
     rokio, AppState, EncryptedCodes,
 };
 use anyhow::Context;
@@ -8,10 +8,11 @@ use axum::{extract::State, response::Json};
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet};
 use rayon::prelude::*;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 #[tracing::instrument(
-        skip(_state, codes),
+        skip(state, codes),
         fields(
             x_code.len = codes.x_code.len(),
             y_code.len = codes.y_code.len(),
@@ -19,31 +20,28 @@ use std::sync::Arc;
         )
     )]
 pub async fn remix_handler(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Json(mut codes): Json<EncryptedCodes>,
 ) -> Result<Json<EncryptedCodes>, Error> {
-    if codes.x_code.len() != codes.y_code.len() {
-        return Err(Error::InvalidLength(
-            "Codes have mismatched lengths.".to_owned(),
-        ));
-    }
-
-    let codes = rokio::spawn(move || {
-        remix::par::remix(
+    let codes = rokio::spawn(move || -> Result<_, CryptoError> {
+        crypto::remix(
             &mut codes.x_code,
             &mut codes.y_code,
-            codes.enc_key.as_ref().unwrap_or(crate::enc_key()),
-        );
-        codes
+            codes
+                .enc_key
+                .as_ref()
+                .unwrap_or(state.pub_key_set().shared_key()),
+        )?;
+        Ok(codes)
     })
-    .await;
+    .await?;
 
     Ok(Json(codes))
 }
 
 #[tracing::instrument(skip(state))]
 pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKeySet<Ristretto>> {
-    Json(state.crypto.active_particiapnt.key_set().clone())
+    Json(state.pub_key_set().clone())
 }
 
 #[tracing::instrument(skip(state, plaintext))]
@@ -52,7 +50,7 @@ pub async fn encrypt(
     Json(plaintext): Json<Vec<u64>>,
 ) -> Json<Vec<Ciphertext>> {
     let ciphertexts = rokio::spawn(move || {
-        let pub_key = state.crypto.active_particiapnt.key_set().shared_key();
+        let pub_key = state.crypto.active_participant.key_set().shared_key();
         plaintext
             .into_par_iter()
             .map(|msg| {
@@ -71,7 +69,7 @@ pub async fn decrypt(
     State(state): State<Arc<AppState>>,
     Json(ciphertext): Json<Vec<Ciphertext>>,
 ) -> Json<Vec<DecryptionShare>> {
-    let client = reqwest::Client::new();
+    let client = state.http_client.clone();
     let mut dec_shares = vec![];
     for p in state.crypto.participants.iter() {
         // TODO: Use URL for participants
@@ -93,27 +91,51 @@ pub async fn decrypt(
     Json(dec_shares)
 }
 
-pub async fn hamming_distance(
-    State(_state): State<Arc<AppState>>,
-    Json(_codes): Json<EncryptedCodes>,
-) -> Result<Json<usize>, Error> {
-    todo!()
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HammingResponse {
+    pub hamming_distance: usize,
 }
 
-async fn request_share(
-    client: &Client,
-    url: &str,
-    ciphertext: &Vec<Ciphertext>,
-) -> anyhow::Result<DecryptionShare> {
-    client
-        .post(url)
-        .json(&ciphertext)
-        .send()
-        .await
-        .with_context(|| format!("request to '{url}' failed"))?
-        .json()
-        .await
-        .context("could not deserialize decryption share")
+pub async fn hamming_distance(
+    State(state): State<Arc<AppState>>,
+    Json(codes): Json<EncryptedCodes>,
+) -> Result<Json<HammingResponse>, Error> {
+    let EncryptedCodes {
+        mut x_code,
+        mut y_code,
+        ..
+    } = codes;
+    // Remix
+    let (mut x_code, mut y_code) = {
+        let inner_state = Arc::clone(&state);
+        rokio::spawn(move || -> Result<_, CryptoError> {
+            crypto::remix(
+                &mut x_code,
+                &mut y_code,
+                inner_state.pub_key_set().shared_key(),
+            )?;
+            Ok((x_code, y_code))
+        })
+        .await?
+    };
+
+    for node in &state.crypto.participants {
+        (x_code, y_code) = request_remix(&state.http_client, &node.url, x_code, y_code).await?;
+    }
+    let (x_code, y_code) = (Arc::new(x_code), Arc::new(y_code));
+
+    // Decrypt
+    let (x_shares, y_shares) = tokio::join!(
+        request_all_shares(&x_code, &state),
+        request_all_shares(&y_code, &state)
+    );
+    // PERF: parallelize and rokio
+    let x_decrypt = crypto::decrypt_shares(state.pub_key_set(), &x_code, &x_shares)?;
+    let y_decrypt = crypto::decrypt_shares(state.pub_key_set(), &y_code, &y_shares)?;
+
+    // Hamming
+    let hamming_distance = crypto::hamming_distance(&x_decrypt, &y_decrypt);
+    Ok(Json(HammingResponse { hamming_distance }))
 }
 
 #[tracing::instrument(skip(state))]
@@ -122,17 +144,97 @@ pub async fn decrypt_share(
     Json(ciphertext): Json<Vec<Ciphertext>>,
 ) -> Json<DecryptionShare> {
     let share = rokio::spawn(move || {
-        let active_participant = &state.crypto.active_particiapnt;
-        let share = ciphertext
-            .into_par_iter()
-            .map(|msg| {
-                let mut rng = rand::thread_rng();
-                active_participant.decrypt_share(msg, &mut rng)
-            })
-            .collect::<Vec<_>>();
-        DecryptionShare::new(active_participant.index(), share)
+        crypto::decryption_share_for(&state.crypto.active_participant, &ciphertext)
     })
     .await;
 
     Json(share)
+}
+
+async fn request_all_shares(
+    code: &Arc<Vec<Ciphertext>>,
+    state: &Arc<AppState>,
+) -> Vec<DecryptionShare> {
+    let mut handles = vec![];
+    for p in state.crypto.participants.clone() {
+        let client = state.http_client.clone();
+        let code = Arc::clone(code);
+
+        let h = tokio::spawn(async move { request_share(&client, &p.url, &code).await });
+        handles.push(h);
+    }
+    // PERF: race futures until threshold, and drop the remaining
+    let mut shares = vec![];
+    for h in handles {
+        match h.await {
+            Ok(Ok(response)) => shares.push(response),
+            _ => continue,
+        }
+    }
+    shares
+}
+
+async fn request_remix(
+    client: &Client,
+    node_url: &str,
+    x_code: Vec<Ciphertext>,
+    y_code: Vec<Ciphertext>,
+) -> anyhow::Result<(Vec<Ciphertext>, Vec<Ciphertext>)> {
+    let response = network_request(
+        client,
+        &format!("{node_url}/remix"),
+        &EncryptedCodes {
+            x_code,
+            y_code,
+            enc_key: None,
+        },
+    )
+    .await?;
+
+    let EncryptedCodes { x_code, y_code, .. } = response
+        .json()
+        .await
+        .context("could not deserialize decryption share")?;
+
+    Ok((x_code, y_code))
+}
+
+async fn request_share(
+    client: &Client,
+    node_url: &str,
+    ciphertext: &Vec<Ciphertext>,
+) -> anyhow::Result<DecryptionShare> {
+    network_request(client, &format!("{node_url}/decrypt-share"), ciphertext)
+        .await?
+        .json()
+        .await
+        .context("could not deserialize decryption share")
+}
+
+pub async fn network_request<T>(
+    client: &Client,
+    url: &str,
+    body: &T,
+) -> anyhow::Result<reqwest::Response>
+where
+    T: Serialize + ?Sized,
+{
+    let response = client
+        .post(url)
+        .json(body)
+        .send()
+        .await
+        .with_context(|| format!("failed sending request to '{url}'"))?
+        .error_for_status()
+        .context("error status code")?;
+
+    if response.status() != reqwest::StatusCode::OK {
+        anyhow::bail!(
+            "request not 'OK' with status code {} and body: {:?}",
+            response.status(),
+            response.text().await
+        );
+    }
+
+    Ok(response)
 }

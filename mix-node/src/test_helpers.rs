@@ -6,7 +6,13 @@ use elastic_elgamal::{
     group::Ristretto,
     sharing::{ActiveParticipant, Dealer, Params, PublicKeySet},
 };
-use std::{iter, sync::OnceLock};
+use std::{
+    iter,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        OnceLock,
+    },
+};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 
@@ -50,7 +56,9 @@ pub async fn create_app(config: Config) -> TestApp {
 pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
     let mut rng = rand::thread_rng();
     let params = Params::new(shares, threshold);
-    const STARTING_PORT: u16 = 8081;
+    // Little hack to avoid used ports... I know
+    static STARTING_PORT: AtomicU16 = AtomicU16::new(8080);
+    let starting_port = STARTING_PORT.fetch_add(shares as u16, Ordering::SeqCst);
 
     // Initialize the dealer.
     let dealer = Dealer::<Ristretto>::new(params, &mut rng);
@@ -67,7 +75,7 @@ pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
     let participant_configs: Vec<_> = participants
         .iter()
         .map(|p| ActiveParticipantConfig {
-            url: format!("localhost:{}", STARTING_PORT + p.index() as u16),
+            url: format!("http://localhost:{}", starting_port + p.index() as u16),
             index: p.index(),
         })
         .collect();
@@ -90,7 +98,7 @@ pub async fn create_network(shares: usize, threshold: usize) -> Vec<TestApp> {
         .map(|(crypto_conf, p)| {
             let mut config = get_configuration().expect("could not get valid configuration");
             config.crypto = crypto_conf;
-            let mut split = p.url.split(':');
+            let mut split = p.url.trim_start_matches("http://").split(':');
             config.application.host = split.next().unwrap().to_owned();
             config.application.port = split.next().unwrap().parse::<u16>().unwrap();
             config

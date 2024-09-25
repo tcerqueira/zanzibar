@@ -17,6 +17,7 @@ pub fn app(state: AppState) -> Router {
     let routes = Router::new()
         .route("/health", get(|| async { "Ok" }))
         .route("/remix", post(routes::remix_handler))
+        .route("/hamming", post(routes::hamming_distance))
         .route("/public-key-set", get(routes::public_key_set))
         .route("/encrypt", post(routes::encrypt))
         .route("/decrypt-share", post(routes::decrypt_share));

@@ -7,16 +7,21 @@ pub mod test_helpers;
 
 use config::CryptoConfig;
 use crypto::Ciphertext;
-use elastic_elgamal::{group::Ristretto, sharing::ActiveParticipant, Keypair, PublicKey};
-use rand::{rngs::StdRng, SeedableRng};
+use elastic_elgamal::{
+    group::Ristretto,
+    sharing::{ActiveParticipant, PublicKeySet},
+    PublicKey,
+};
+use reqwest::Client;
 use secrecy::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::PgPool;
-use std::{fmt::Debug, sync::OnceLock};
+use std::fmt::Debug;
 
 pub const N_BITS: usize = 25600;
 
 pub struct AppState {
+    http_client: Client,
     auth_token: Option<Secret<String>>,
     #[expect(dead_code)]
     pool: PgPool,
@@ -30,6 +35,7 @@ impl AppState {
         crypto_config: CryptoConfig,
     ) -> Self {
         Self {
+            http_client: Client::new(),
             auth_token,
             pool,
             crypto: crypto_config
@@ -37,14 +43,19 @@ impl AppState {
                 .expect("failed to create active participant from config"),
         }
     }
+
+    fn pub_key_set(&self) -> &PublicKeySet<Ristretto> {
+        self.crypto.active_participant.key_set()
+    }
 }
 
 struct CryptoState {
-    active_particiapnt: ActiveParticipant<Ristretto>,
+    active_participant: ActiveParticipant<Ristretto>,
     participants: Vec<ParticipantState>,
 }
 
 #[expect(dead_code)]
+#[derive(Debug, Clone)]
 struct ParticipantState {
     index: usize,
     url: String,
@@ -70,15 +81,6 @@ where
     Ok(vec)
 }
 
-fn enc_key() -> &'static PublicKey<Ristretto> {
-    // TODO: remove hardcoded encryption key from a fixed seed
-    static ENC_KEY: OnceLock<PublicKey<Ristretto>> = OnceLock::new();
-    ENC_KEY.get_or_init(|| {
-        let receiver = Keypair::generate(&mut StdRng::seed_from_u64(1234567890));
-        receiver.into_tuple().0
-    })
-}
-
 impl TryFrom<CryptoConfig> for CryptoState {
     type Error = elastic_elgamal::sharing::Error;
 
@@ -94,7 +96,7 @@ impl TryFrom<CryptoConfig> for CryptoState {
             .collect::<Vec<_>>();
 
         Ok(Self {
-            active_particiapnt: ActiveParticipant::new(
+            active_participant: ActiveParticipant::new(
                 config.key_set,
                 config.whoami,
                 config.secret_key,

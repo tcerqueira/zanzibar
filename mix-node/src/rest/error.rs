@@ -4,6 +4,8 @@ use axum::{
 };
 use thiserror::Error;
 
+use crate::crypto::CryptoError;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("InvalidLength: {0}")]
@@ -22,5 +24,13 @@ impl IntoResponse for Error {
             }
         };
         (status_code, self.to_string()).into_response()
+    }
+}
+
+impl From<CryptoError> for Error {
+    fn from(err: CryptoError) -> Self {
+        match err {
+            CryptoError::InvalidLength(s) => Self::InvalidLength(s),
+        }
     }
 }

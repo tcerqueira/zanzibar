@@ -51,7 +51,7 @@ fn bench_mix_node(c: &mut Criterion) {
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let test_app = rt.block_on(test_helpers::create_app(config));
-    let client = Arc::new(reqwest::Client::new());
+    let client = reqwest::Client::new();
 
     let payload = Arc::new(EncryptedCodes {
         x_code: ct1,
@@ -60,14 +60,14 @@ fn bench_mix_node(c: &mut Criterion) {
     });
 
     async fn bench_fn(
-        client: Arc<Client>,
+        client: Client,
         concurrent_req: u16,
         port: u16,
         payload: Arc<EncryptedCodes>,
     ) -> anyhow::Result<()> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
-            let client = Arc::clone(&client);
+            let client = client.clone();
             let payload = Arc::clone(&payload);
             let handle = tokio::spawn(async move {
                 let _response: EncryptedCodes = client
@@ -93,13 +93,13 @@ fn bench_mix_node(c: &mut Criterion) {
 
     group.bench_function("one request", |b| {
         b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 1, test_app.port, Arc::clone(&payload)))
+            .iter(|| bench_fn(client.clone(), 1, test_app.port, Arc::clone(&payload)))
     });
 
     group.bench_function(f!("{N_THREADS} parallel"), |b| {
         b.to_async(&rt).iter(|| {
             bench_fn(
-                Arc::clone(&client),
+                client.clone(),
                 N_THREADS,
                 test_app.port,
                 Arc::clone(&payload),
@@ -111,13 +111,13 @@ fn bench_mix_node(c: &mut Criterion) {
 
     group.bench_function(f!("one request {N_SMALL_BITS} bits subset"), |b| {
         b.to_async(&rt)
-            .iter(|| bench_fn(Arc::clone(&client), 1, test_app.port, Arc::clone(&payload)))
+            .iter(|| bench_fn(client.clone(), 1, test_app.port, Arc::clone(&payload)))
     });
 
     group.bench_function(f!("{N_THREADS} parallel {N_SMALL_BITS} bits subset"), |b| {
         b.to_async(&rt).iter(|| {
             bench_fn(
-                Arc::clone(&client),
+                client.clone(),
                 N_THREADS,
                 test_app.port,
                 Arc::clone(&payload),
@@ -126,7 +126,7 @@ fn bench_mix_node(c: &mut Criterion) {
     });
 
     async fn bench_final_fn(
-        client: Arc<Client>,
+        client: Client,
         dec_key: &SecretKey<Ristretto>,
         concurrent_req: u16,
         port: u16,
@@ -134,7 +134,7 @@ fn bench_mix_node(c: &mut Criterion) {
     ) -> anyhow::Result<usize> {
         let mut join_handles = Vec::with_capacity(concurrent_req as usize);
         for _ in 0..concurrent_req {
-            let client = Arc::clone(&client);
+            let client = client.clone();
             let payload = Arc::clone(&payload);
             let dec_key = dec_key.clone();
             let handle = tokio::spawn(async move {
@@ -174,7 +174,7 @@ fn bench_mix_node(c: &mut Criterion) {
     group.bench_function("final send+remix+receive+decrypt+hamming", |b| {
         b.to_async(&rt).iter(|| {
             bench_final_fn(
-                Arc::clone(&client),
+                client.clone(),
                 receiver.secret(),
                 N_THREADS,
                 test_app.port,

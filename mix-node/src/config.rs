@@ -2,17 +2,18 @@ use std::path::PathBuf;
 
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, SecretKey};
 use secrecy::Secret;
+use serde::Deserialize;
 use serde_aux::field_attributes::deserialize_number_from_string;
 
 #[non_exhaustive]
-#[derive(serde::Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub application: ApplicationConfig,
     pub database: DatabaseConfig,
     pub crypto: CryptoConfig,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ApplicationConfig {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
@@ -20,7 +21,7 @@ pub struct ApplicationConfig {
     pub auth_token: Option<Secret<String>>,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct DatabaseConfig {
     pub username: String,
     pub password: Secret<String>,
@@ -31,7 +32,7 @@ pub struct DatabaseConfig {
     pub require_ssl: bool,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct CryptoConfig {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub whoami: usize,
@@ -40,7 +41,7 @@ pub struct CryptoConfig {
     pub participants: Vec<ActiveParticipantConfig>,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ActiveParticipantConfig {
     pub url: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]

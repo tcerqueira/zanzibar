@@ -6,6 +6,7 @@ use format as f;
 use mix_node::{
     config::get_configuration,
     crypto::{self, DecryptionShare},
+    rest::routes::HammingResponse,
     test_helpers::{self, TestApp},
     EncryptedCodes,
 };
@@ -162,7 +163,7 @@ async fn test_mix_node_encrypt() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_network_of_mix_nodes() -> anyhow::Result<()> {
+async fn test_network_decrypt_shares() -> anyhow::Result<()> {
     let nodes = test_helpers::create_network(3, 2).await;
 
     // Request public key
@@ -196,7 +197,50 @@ async fn test_network_of_mix_nodes() -> anyhow::Result<()> {
         shares.push(share);
     }
 
-    let decrypted = crypto::decrypt_shares(pub_key, encrypted, shares).expect("failed to decrypt");
+    let decrypted =
+        crypto::decrypt_shares(&pub_key, &encrypted, &shares).expect("failed to decrypt");
     assert_eq!(payload, decrypted);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_network_hamming_distance() -> anyhow::Result<()> {
+    let [TestApp { port, .. }, ..] = test_helpers::create_network(3, 2).await[..] else {
+        return Err(anyhow::anyhow!("there's not at least one node"));
+    };
+    let mut rng = rand::thread_rng();
+
+    // Request public key
+    let client = reqwest::Client::new();
+    let response = client
+        .get(f!("http://localhost:{}/public-key-set", port))
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let pub_key: PublicKeySet<Ristretto> = response.json().await?;
+
+    // Codes are the same, expected hamming distance = 0
+    let payload = {
+        let code: Vec<_> = (0..10u64)
+            .map(|m| pub_key.shared_key().encrypt(m, &mut rng))
+            .collect();
+        EncryptedCodes {
+            x_code: code.clone(),
+            y_code: code,
+            enc_key: Some(pub_key.shared_key().clone()),
+        }
+    };
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(f!("http://localhost:{port}/hamming"))
+        .json(&payload)
+        .send()
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let HammingResponse { hamming_distance } = response.json().await?;
+    assert_eq!(hamming_distance, 0);
+
     Ok(())
 }

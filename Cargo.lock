@@ -1552,6 +1552,7 @@ dependencies = [
  "config",
  "criterion",
  "elastic-elgamal",
+ "futures",
  "lambda_http",
  "mimalloc",
  "rand",
