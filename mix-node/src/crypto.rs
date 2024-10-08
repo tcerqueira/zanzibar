@@ -1,5 +1,4 @@
 use anyhow::Context;
-use bitvec::vec::BitVec;
 use elastic_elgamal::{
     group::Ristretto,
     sharing::{ActiveParticipant, PublicKeySet},
@@ -11,6 +10,7 @@ use std::sync::LazyLock;
 use thiserror::Error;
 
 pub type Ciphertext = elastic_elgamal::Ciphertext<Ristretto>;
+pub type Bits = bitvec::vec::BitVec;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecryptionShare {
@@ -52,6 +52,26 @@ pub fn remix(
     Ok(())
 }
 
+pub fn encrypt(pub_key: &PublicKey<Ristretto>, bits: &Bits) -> Vec<Ciphertext> {
+    bits.as_raw_slice()
+        .into_par_iter()
+        .enumerate()
+        .flat_map(|(chunk_idx, &chunk)| {
+            let chunk_size = 8 * std::mem::size_of_val(&chunk);
+            let start_bit = chunk_idx * chunk_size;
+            let end_bit = std::cmp::min(start_bit + chunk_size, bits.len());
+
+            (0..end_bit - start_bit)
+                .into_par_iter()
+                .map(move |bit_offset| {
+                    let mut rng = rand::thread_rng();
+                    let bit = (chunk >> bit_offset) & 1;
+                    pub_key.encrypt(bit as u64, &mut rng)
+                })
+        })
+        .collect::<Vec<_>>()
+}
+
 pub fn decryption_share_for(
     active_participant: &ActiveParticipant<Ristretto>,
     ciphertext: &[Ciphertext],
@@ -66,47 +86,46 @@ pub fn decryption_share_for(
     DecryptionShare::new(active_participant.index(), share)
 }
 
-// PERF: parallelize and maybe async this
+// PERF: parallelize this
 pub fn decrypt_shares(
     key_set: &PublicKeySet<Ristretto>,
     enc: &[Ciphertext],
     shares: &[DecryptionShare],
-) -> anyhow::Result<BitVec> {
+) -> anyhow::Result<Bits> {
     if shares.iter().any(|s| s.share.len() != enc.len()) {
-        return Err(anyhow::anyhow!(
-            "mismatch of lengths between encrypted ciphertext a decryption shares"
-        ));
+        anyhow::bail!("mismatch of lengths between encrypted ciphertext a decryption shares");
     }
     // Transpose vectors
-    let rows = shares.len();
-    let cols = enc.len();
-    let transposed = (0..cols).map(|col| {
-        (0..rows)
-            .map(|row| (shares[row].index, shares[row].share[col]))
-            .collect::<Vec<_>>()
+    let transposed = (0..enc.len()).into_par_iter().map(|ct_idx| {
+        shares
+            .into_par_iter()
+            .map(move |s| (s.index, s.share[ct_idx]))
     });
 
     transposed
         .zip(enc)
         .map(|(shares, enc)| {
-            let dec_iter = shares.into_iter().filter_map(|(i, (share, proof))| {
-                let share = CandidateDecryption::from_bytes(&share.to_bytes())?;
-                let verification = key_set.verify_share(share, *enc, i, &proof).ok()?;
-                Some((i, verification))
-            });
+            let dec_iter: Vec<_> = shares
+                .filter_map(|(i, (share, proof))| {
+                    let share = CandidateDecryption::from_bytes(&share.to_bytes())?;
+                    let verification = key_set.verify_share(share, *enc, i, &proof).ok()?;
+                    Some((i, verification))
+                })
+                .collect();
             let combined = key_set
                 .params()
-                .combine_shares(dec_iter)
+                .combine_shares(dec_iter.into_iter())
                 .context("failed to combine shares")?;
             Ok(combined
                 .decrypt(*enc, &LOOKUP_TABLE)
                 .context("decrypted values out of range of lookup table")?
                 == 1u64)
         })
-        .collect::<anyhow::Result<BitVec>>()
+        .collect::<anyhow::Result<Vec<_>>>()
+        .map(Bits::from_iter)
 }
 
-pub fn hamming_distance(x_code: BitVec, y_code: BitVec) -> usize {
+pub fn hamming_distance(x_code: Bits, y_code: Bits) -> usize {
     // Q: What if x and y are different sizes?
     (x_code ^ y_code).count_ones()
 }
