@@ -5,7 +5,7 @@ use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet, Ciphertext};
 use format as f;
 use mix_node::{
     config::get_configuration,
-    crypto::{self, DecryptionShare},
+    crypto::{self, Bits, DecryptionShare},
     rest::routes::HammingResponse,
     test_helpers::{self, TestApp},
     EncryptedCodes,
@@ -41,9 +41,8 @@ async fn test_mix_node() -> anyhow::Result<()> {
         .await?;
 
     // Decrypt
-    let dec_new_user: BitVec<u8, Lsb0> =
-        common::decrypt_bits(&enc_new_user, receiver.secret()).collect();
-    let dec_archived_user: BitVec<u8, Lsb0> =
+    let dec_new_user: Bits = common::decrypt_bits(&enc_new_user, receiver.secret()).collect();
+    let dec_archived_user: Bits =
         common::decrypt_bits(&enc_archived_user, receiver.secret()).collect();
 
     // Assert result
@@ -63,7 +62,9 @@ async fn test_mix_node_bad_request() -> anyhow::Result<()> {
     config.application.auth_token = None;
     let TestApp { port, .. } = test_helpers::create_app(config).await;
 
-    let (mut codes, _dec_key) = common::set_up_payload();
+    // let code = common::set_up_iris_code(mix_node::N_BITS);
+
+    let (mut codes, _receiver) = common::set_up_payload();
     // Remove elements to cause a size mismatch
     codes.x_code.pop();
     codes.x_code.pop();
@@ -107,9 +108,9 @@ async fn test_mix_node_authorized() -> anyhow::Result<()> {
     config.application.auth_token = Some(Secret::new(auth_token.to_string()));
     let TestApp { port, .. } = test_helpers::create_app(config).await;
 
-    let (codes, _dec_key) = common::set_up_payload();
+    let (codes, _receiver) = common::set_up_payload();
 
-    // Bad request + Serialization
+    // Auth
     let client = reqwest::Client::new();
     let response = client
         .post(format!("http://localhost:{port}/remix"))
@@ -136,7 +137,6 @@ async fn test_mix_node_public_key() -> anyhow::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let _body: PublicKeySet<Ristretto> = response.json().await?;
-
     Ok(())
 }
 
@@ -145,7 +145,7 @@ async fn test_mix_node_encrypt() -> anyhow::Result<()> {
     let config = get_configuration()?;
     let TestApp { port, .. } = test_helpers::create_app(config).await;
 
-    let payload = bitvec![0, 1, 0, 1, 1, 0, 0, 1];
+    let payload = common::set_up_iris_code(mix_node::N_BITS);
 
     let client = reqwest::Client::new();
     let response = client
@@ -173,14 +173,17 @@ async fn test_network_decrypt_shares() -> anyhow::Result<()> {
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Encrypt client side
-    let mut rng = rand::thread_rng();
-    let payload = bitvec![0, 1, 0, 1, 1, 0, 0, 1];
+    // Encrypt server side
+    let payload: Bits = bitvec![0, 1, 0, 1, 1, 0, 0, 1];
+
     let pub_key: PublicKeySet<Ristretto> = response.json().await?;
-    let encrypted: Vec<_> = payload
-        .iter()
-        .map(|pt| pub_key.shared_key().encrypt(*pt as u64, &mut rng))
-        .collect();
+    let encrypted: Vec<_> = client
+        .post(f!("http://localhost:{}/encrypt", nodes[0].port))
+        .json(&payload)
+        .send()
+        .await?
+        .json()
+        .await?;
 
     // Decrypt
     let mut shares = vec![];
@@ -205,9 +208,8 @@ async fn test_network_decrypt_shares() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_network_hamming_distance() -> anyhow::Result<()> {
     let [TestApp { port, .. }, ..] = test_helpers::create_network(3, 2).await[..] else {
-        return Err(anyhow::anyhow!("there's not at least one node"));
+        return Err(anyhow::anyhow!("needs at least one node"));
     };
-    let mut rng = rand::thread_rng();
 
     // Request public key
     let client = reqwest::Client::new();
@@ -220,10 +222,10 @@ async fn test_network_hamming_distance() -> anyhow::Result<()> {
 
     // Codes are the same, expected hamming distance = 0
     let payload = {
-        let code: Vec<_> = [0, 1, 0, 1, 1, 0, 0, 1u64]
-            .into_iter()
-            .map(|m| pub_key.shared_key().encrypt(m, &mut rng))
-            .collect();
+        let code = crypto::encrypt(
+            pub_key.shared_key(),
+            &common::set_up_iris_code(mix_node::N_BITS),
+        );
         EncryptedCodes {
             x_code: code.clone(),
             y_code: code,

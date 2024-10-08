@@ -8,7 +8,7 @@ use sqlx::{
 use std::{pin::Pin, time::Duration};
 use tokio_stream::StreamExt;
 
-pub async fn connect_database(config: DatabaseConfig) -> PgPool {
+pub fn connect_database(config: DatabaseConfig) -> PgPool {
     let pool_options = PgPoolOptions::default().acquire_timeout(Duration::from_secs(5));
     let conn_options = PgConnectOptions::new()
         .host(&config.host)

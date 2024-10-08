@@ -6,14 +6,18 @@
         "shares": 3,
         "threshold": 2
       },
-      "shared_key": "FBvSpgZvzkW5RRoctNgYD4RJ4CXbmqc0ZYHDeJApnmA",
+      "shared_key": "0DONI8XVqM0BDdRTMAzVBcnPmvpvCBVEXWC0MJRSWlg",
       "participant_keys": [
-        "nlI1vA51gHFnwuw6h_LZyqbVIMhQZzuxpq0OzLTRkmY",
-        "PhCOTCd31ppl7LoK5sKx-g7ovbvQLxAh5osWIFFcq0g",
-        "YEe2GzjjOa2_Kk3w4PRaFsjhhqR22dn0fVVlt1sjWHI"
+        "hpIre2zSXSlc_VeQm3iXs0tI04mQTMOGuqNZ-P97_E4",
+        "BIdIgf4xF_PCX-UMnUR_g3Xl29hqyus1oy7mn-9xcy8",
+        "tpZEuMGqA-JHEGZc86U969bUGogSO0iXKOzgT6ZgSxw"
       ]
     },
-    "secret_key": "q1yPxk8MbAApm694rYY92pFRfiMfLbFcLRzQ-z7K6AM",
-    "participants": []
+    "secret_key": "D7W4K_1QPjuoEQNsTeyWT92yHSPp67-sApmGksw9EQo",
+    "participants": [
+      { "url": "http://localhost:6000", "index": 0 },
+      { "url": "http://localhost:6001", "index": 1 },
+      { "url": "http://localhost:6002", "index": 2 }
+    ]
   }
 }

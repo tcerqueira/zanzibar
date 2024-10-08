@@ -10,6 +10,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_test_writer()
         .init();
 
     let Config {
@@ -23,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(address).await?;
     let port = listener.local_addr()?.port();
 
-    let conn = db::connect_database(db_config).await;
+    let conn = db::connect_database(db_config);
     let state = AppState::new(app_config.auth_token, conn, crypto_config);
 
     tracing::info!("Listening on http://{}:{port}...", app_config.host);

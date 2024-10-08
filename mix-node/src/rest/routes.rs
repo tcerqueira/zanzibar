@@ -1,16 +1,15 @@
 use super::error::Error;
 use crate::{
-    crypto::{self, Ciphertext, CryptoError, DecryptionShare},
+    crypto::{self, Bits, Ciphertext, CryptoError, DecryptionShare},
     rokio, AppState, EncryptedCodes,
 };
 use anyhow::Context;
 use axum::{extract::State, response::Json};
-use bitvec::vec::BitVec;
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet};
-use rayon::prelude::*;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing::Level;
 
 #[tracing::instrument(
         skip(state, codes),
@@ -45,21 +44,14 @@ pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKe
     Json(state.pub_key_set().clone())
 }
 
-#[tracing::instrument(skip(state, plaintext))]
+#[tracing::instrument(skip(state, bits))]
 pub async fn encrypt(
     State(state): State<Arc<AppState>>,
-    Json(plaintext): Json<BitVec>,
+    Json(bits): Json<Bits>,
 ) -> Json<Vec<Ciphertext>> {
     let ciphertexts = rokio::spawn(move || {
         let pub_key = state.crypto.active_participant.key_set().shared_key();
-        plaintext
-            .into_iter()
-            .par_bridge()
-            .map(|msg| {
-                let mut rng = rand::thread_rng();
-                pub_key.encrypt(msg as u64, &mut rng)
-            })
-            .collect::<Vec<_>>()
+        crypto::encrypt(pub_key, &bits)
     })
     .await;
 
@@ -98,6 +90,7 @@ pub struct HammingResponse {
     pub hamming_distance: usize,
 }
 
+#[tracing::instrument(skip(state, codes), err(Debug, level = Level::ERROR))]
 pub async fn hamming_distance(
     State(state): State<Arc<AppState>>,
     Json(codes): Json<EncryptedCodes>,
@@ -122,18 +115,50 @@ pub async fn hamming_distance(
     };
 
     for node in &state.crypto.participants {
-        (x_code, y_code) = request_remix(&state.http_client, &node.url, x_code, y_code).await?;
+        (x_code, y_code) = request_remix(
+            &state.http_client,
+            &node.url,
+            x_code.clone(),
+            y_code.clone(),
+        )
+        .await
+        .unwrap_or((x_code, y_code));
     }
     let (x_code, y_code) = (Arc::new(x_code), Arc::new(y_code));
 
     // Decrypt
-    let (x_shares, y_shares) = tokio::join!(
-        request_all_shares(&x_code, &state),
-        request_all_shares(&y_code, &state)
-    );
-    // PERF: parallelize and rokio
-    let x_decrypt = crypto::decrypt_shares(state.pub_key_set(), &x_code, &x_shares)?;
-    let y_decrypt = crypto::decrypt_shares(state.pub_key_set(), &y_code, &y_shares)?;
+    let (x_shares, y_shares) = {
+        let (x_state, y_state) = (Arc::clone(&state), Arc::clone(&state));
+        let (x_inner_code, y_inner_code) = (Arc::clone(&x_code), Arc::clone(&y_code));
+
+        let (mut x_shares, mut y_shares, x_self_share, y_self_share) = tokio::join!(
+            request_all_shares(&x_code, &state),
+            request_all_shares(&y_code, &state),
+            rokio::spawn(move || {
+                crypto::decryption_share_for(&x_state.crypto.active_participant, &x_inner_code)
+            }),
+            rokio::spawn(move || {
+                crypto::decryption_share_for(&y_state.crypto.active_participant, &y_inner_code)
+            })
+        );
+        x_shares.push(x_self_share);
+        y_shares.push(y_self_share);
+
+        (x_shares, y_shares)
+    };
+
+    let x_decrypt = {
+        let state = Arc::clone(&state);
+        rokio::spawn(move || crypto::decrypt_shares(state.pub_key_set(), &x_code, &x_shares))
+    };
+    let y_decrypt = {
+        let state = Arc::clone(&state);
+        rokio::spawn(move || crypto::decrypt_shares(state.pub_key_set(), &y_code, &y_shares))
+    };
+    let (x_decrypt, y_decrypt) = {
+        let (x_decrypt, y_decrypt) = tokio::join!(x_decrypt, y_decrypt);
+        (x_decrypt?, y_decrypt?)
+    };
 
     // Hamming
     let hamming_distance = crypto::hamming_distance(x_decrypt, y_decrypt);

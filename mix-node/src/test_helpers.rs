@@ -37,7 +37,7 @@ pub async fn create_app(config: Config) -> TestApp {
     let port = listener.local_addr().unwrap().port();
 
     let join_handle = tokio::spawn(async move {
-        let conn = db::connect_database(db_config).await;
+        let conn = db::connect_database(db_config);
         // DB unused at the moment
         // sqlx::migrate!()
         //     .run(&conn)

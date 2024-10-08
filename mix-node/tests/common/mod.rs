@@ -1,12 +1,16 @@
+#![allow(dead_code)]
+
 use bitvec::prelude::*;
 use elastic_elgamal::{group::Ristretto, DiscreteLogTable, Keypair, PublicKey, SecretKey};
-use mix_node::{crypto::Ciphertext, EncryptedCodes};
+use mix_node::{
+    crypto::{self, Bits, Ciphertext},
+    EncryptedCodes,
+};
 use rand::{CryptoRng, Rng};
 use std::iter;
 
 pub const N_BITS: usize = mix_node::N_BITS / 2;
 
-#[allow(unused)]
 pub fn set_up_payload() -> (EncryptedCodes, Keypair<Ristretto>) {
     let mut rng = rand::thread_rng();
     let new_iris_code = BitVec::<_, Lsb0>::from_slice(&rng.gen::<[u8; N_BITS / 8]>());
@@ -20,11 +24,10 @@ pub fn set_up_payload() -> (EncryptedCodes, Keypair<Ristretto>) {
 
     // Encrypt
     let receiver = Keypair::generate(&mut rng);
-    let dec_key = receiver.secret().clone();
     let enc_key = receiver.public().clone();
 
-    let enc_new_user: Vec<_> = encrypt_bits(&new_user[..], &enc_key, &mut rng).collect();
-    let enc_archived_user: Vec<_> = encrypt_bits(&archived_user[..], &enc_key, &mut rng).collect();
+    let enc_new_user: Vec<_> = crypto::encrypt(receiver.public(), &new_user);
+    let enc_archived_user: Vec<_> = crypto::encrypt(receiver.public(), &archived_user);
 
     (
         EncryptedCodes {
@@ -36,7 +39,11 @@ pub fn set_up_payload() -> (EncryptedCodes, Keypair<Ristretto>) {
     )
 }
 
-#[allow(unused)]
+pub fn set_up_iris_code(size: usize) -> Bits {
+    let mut rng = rand::thread_rng();
+    (0..size).map(|_| rng.gen::<bool>()).collect::<Bits>()
+}
+
 pub fn encode_bits<T: BitStore, O: BitOrder>(
     bits: &BitSlice<T, O>,
 ) -> impl Iterator<Item = bool> + '_ {
@@ -49,7 +56,6 @@ pub fn encode_bits<T: BitStore, O: BitOrder>(
     })
 }
 
-#[allow(unused)]
 pub fn decode_bits<T: BitStore, O: BitOrder>(
     bits: &BitSlice<T, O>,
 ) -> impl Iterator<Item = bool> + '_ {
@@ -63,7 +69,6 @@ pub fn decode_bits<T: BitStore, O: BitOrder>(
     })
 }
 
-#[allow(unused)]
 pub fn encrypt_bits<'a, T: BitStore, O: BitOrder>(
     bits: &'a BitSlice<T, O>,
     ek: &'a PublicKey<Ristretto>,
@@ -72,7 +77,6 @@ pub fn encrypt_bits<'a, T: BitStore, O: BitOrder>(
     bits.iter().map(|bit| ek.encrypt(*bit as u32, rng))
 }
 
-#[allow(unused)]
 pub fn decrypt_bits<'a>(
     ct: &'a [Ciphertext],
     pk: &'a SecretKey<Ristretto>,
