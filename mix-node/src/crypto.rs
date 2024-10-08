@@ -1,4 +1,5 @@
 use anyhow::Context;
+use bitvec::vec::BitVec;
 use elastic_elgamal::{
     group::Ristretto,
     sharing::{ActiveParticipant, PublicKeySet},
@@ -6,7 +7,7 @@ use elastic_elgamal::{
 };
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{iter, sync::LazyLock};
+use std::sync::LazyLock;
 use thiserror::Error;
 
 pub type Ciphertext = elastic_elgamal::Ciphertext<Ristretto>;
@@ -28,7 +29,7 @@ impl DecryptionShare {
 
 // TODO: lookup table can be just 0..1 in prod
 pub static LOOKUP_TABLE: LazyLock<DiscreteLogTable<Ristretto>> =
-    LazyLock::new(|| DiscreteLogTable::<Ristretto>::new(0..256));
+    LazyLock::new(|| DiscreteLogTable::<Ristretto>::new(0..=1));
 
 #[derive(Debug, Error)]
 pub enum CryptoError {
@@ -70,7 +71,7 @@ pub fn decrypt_shares(
     key_set: &PublicKeySet<Ristretto>,
     enc: &[Ciphertext],
     shares: &[DecryptionShare],
-) -> anyhow::Result<Vec<u64>> {
+) -> anyhow::Result<BitVec> {
     if shares.iter().any(|s| s.share.len() != enc.len()) {
         return Err(anyhow::anyhow!(
             "mismatch of lengths between encrypted ciphertext a decryption shares"
@@ -97,16 +98,17 @@ pub fn decrypt_shares(
                 .params()
                 .combine_shares(dec_iter)
                 .context("failed to combine shares")?;
-            combined
+            Ok(combined
                 .decrypt(*enc, &LOOKUP_TABLE)
-                .context("decrypted values out of range of lookup table")
+                .context("decrypted values out of range of lookup table")?
+                == 1u64)
         })
-        .collect::<anyhow::Result<Vec<_>>>()
+        .collect::<anyhow::Result<BitVec>>()
 }
 
-pub fn hamming_distance(x_code: &[u64], y_code: &[u64]) -> usize {
+pub fn hamming_distance(x_code: BitVec, y_code: BitVec) -> usize {
     // Q: What if x and y are different sizes?
-    iter::zip(x_code, y_code).filter(|(&x, &y)| x != y).count()
+    (x_code ^ y_code).count_ones()
 }
 
 #[cfg(test)]
@@ -148,8 +150,8 @@ mod tests {
             })
             .collect();
 
-        let x_payload: Vec<_> = [0, 1, 2, 3, 4, 5u64].to_vec();
-        let y_payload: Vec<_> = [1, 1, 2, 3, 4, 5u64].to_vec();
+        let x_payload: Vec<_> = [0, 1, 0, 1, 0, 1u64].to_vec();
+        let y_payload: Vec<_> = [1, 1, 0, 1, 0, 1u64].to_vec();
         // Encrypt
         let mut x_ct = x_payload
             .iter()
@@ -179,14 +181,14 @@ mod tests {
         let x_decrypted = decrypt_shares(&key_set, &x_ct, &x_shares)?;
         let y_decrypted = decrypt_shares(&key_set, &y_ct, &y_shares)?;
 
-        assert_eq!(hamming_distance(&x_decrypted, &y_decrypted), 1);
+        assert_eq!(hamming_distance(x_decrypted, y_decrypted), 1);
         Ok(())
     }
 
     #[test]
     fn test_decrypt_shares() -> anyhow::Result<()> {
         let (key_set, dealer, mut rng) = setup(3, 2);
-        let plaintext = 5u64;
+        let plaintext = 1u64;
         let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
 
         let shares: Vec<_> = (0..3)
@@ -204,7 +206,7 @@ mod tests {
             .collect();
 
         let decrypted = decrypt_shares(&key_set, &[encrypted], &shares).unwrap();
-        assert_eq!(decrypted[0], plaintext);
+        assert_eq!(decrypted[0] as u64, plaintext);
         Ok(())
     }
 
@@ -235,7 +237,7 @@ mod tests {
     fn test_decrypt_enough_shares() -> anyhow::Result<()> {
         let (key_set, dealer, mut rng) = setup(3, 2);
 
-        let plaintext = 5u64;
+        let plaintext = 1u64;
         let encrypted = key_set.shared_key().encrypt(plaintext, &mut rng);
 
         let shares: Vec<_> = (0..2)
@@ -253,7 +255,7 @@ mod tests {
             .collect();
 
         let decrypted = decrypt_shares(&key_set, &[encrypted], &shares).unwrap();
-        assert_eq!(decrypted[0], plaintext);
+        assert_eq!(decrypted[0] as u64, plaintext);
         Ok(())
     }
 

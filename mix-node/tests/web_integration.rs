@@ -145,7 +145,7 @@ async fn test_mix_node_encrypt() -> anyhow::Result<()> {
     let config = get_configuration()?;
     let TestApp { port, .. } = test_helpers::create_app(config).await;
 
-    let payload: Vec<_> = (0..10u64).collect();
+    let payload = bitvec![0, 1, 0, 1, 1, 0, 0, 1];
 
     let client = reqwest::Client::new();
     let response = client
@@ -158,7 +158,6 @@ async fn test_mix_node_encrypt() -> anyhow::Result<()> {
     let body: Vec<Ciphertext<Ristretto>> = response.json().await?;
 
     assert_eq!(payload.len(), body.len());
-
     Ok(())
 }
 
@@ -176,11 +175,11 @@ async fn test_network_decrypt_shares() -> anyhow::Result<()> {
 
     // Encrypt client side
     let mut rng = rand::thread_rng();
-    let payload: Vec<_> = (0..8u64).collect();
+    let payload = bitvec![0, 1, 0, 1, 1, 0, 0, 1];
     let pub_key: PublicKeySet<Ristretto> = response.json().await?;
     let encrypted: Vec<_> = payload
         .iter()
-        .map(|pt| pub_key.shared_key().encrypt(*pt, &mut rng))
+        .map(|pt| pub_key.shared_key().encrypt(*pt as u64, &mut rng))
         .collect();
 
     // Decrypt
@@ -221,7 +220,8 @@ async fn test_network_hamming_distance() -> anyhow::Result<()> {
 
     // Codes are the same, expected hamming distance = 0
     let payload = {
-        let code: Vec<_> = (0..10u64)
+        let code: Vec<_> = [0, 1, 0, 1, 1, 0, 0, 1u64]
+            .into_iter()
             .map(|m| pub_key.shared_key().encrypt(m, &mut rng))
             .collect();
         EncryptedCodes {

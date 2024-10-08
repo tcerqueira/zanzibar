@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Context;
 use axum::{extract::State, response::Json};
+use bitvec::vec::BitVec;
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet};
 use rayon::prelude::*;
 use reqwest::Client;
@@ -47,15 +48,16 @@ pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKe
 #[tracing::instrument(skip(state, plaintext))]
 pub async fn encrypt(
     State(state): State<Arc<AppState>>,
-    Json(plaintext): Json<Vec<u64>>,
+    Json(plaintext): Json<BitVec>,
 ) -> Json<Vec<Ciphertext>> {
     let ciphertexts = rokio::spawn(move || {
         let pub_key = state.crypto.active_participant.key_set().shared_key();
         plaintext
-            .into_par_iter()
+            .into_iter()
+            .par_bridge()
             .map(|msg| {
                 let mut rng = rand::thread_rng();
-                pub_key.encrypt(msg, &mut rng)
+                pub_key.encrypt(msg as u64, &mut rng)
             })
             .collect::<Vec<_>>()
     })
@@ -134,7 +136,7 @@ pub async fn hamming_distance(
     let y_decrypt = crypto::decrypt_shares(state.pub_key_set(), &y_code, &y_shares)?;
 
     // Hamming
-    let hamming_distance = crypto::hamming_distance(&x_decrypt, &y_decrypt);
+    let hamming_distance = crypto::hamming_distance(x_decrypt, y_decrypt);
     Ok(Json(HammingResponse { hamming_distance }))
 }
 
