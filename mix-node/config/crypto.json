@@ -1,0 +1,19 @@
+{
+  "crypto": {
+    "whoami": 0,
+    "key_set": {
+      "params": {
+        "shares": 3,
+        "threshold": 2
+      },
+      "shared_key": "FBvSpgZvzkW5RRoctNgYD4RJ4CXbmqc0ZYHDeJApnmA",
+      "participant_keys": [
+        "nlI1vA51gHFnwuw6h_LZyqbVIMhQZzuxpq0OzLTRkmY",
+        "PhCOTCd31ppl7LoK5sKx-g7ovbvQLxAh5osWIFFcq0g",
+        "YEe2GzjjOa2_Kk3w4PRaFsjhhqR22dn0fVVlt1sjWHI"
+      ]
+    },
+    "secret_key": "q1yPxk8MbAApm694rYY92pFRfiMfLbFcLRzQ-z7K6AM",
+    "participants": []
+  }
+}

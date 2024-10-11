@@ -4,12 +4,10 @@ on:
     branches:
       - master
   pull_request:
-    types: [ opened, synchronize, reopened ]
+    types: [opened, synchronize, reopened]
     branches:
       - master
   workflow_dispatch:
-    branches:
-      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,11 +16,38 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: username
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: iris-codes
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: arduino/setup-protoc@v3
+      - uses: baptiste0928/cargo-install@v3
+        with:
+          crate: sqlx-cli
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run migrations
+        run: sqlx migrate run --source mix-node/migrations
+        env:
+          DATABASE_URL: postgres://username:password@localhost/iris-codes
       - run: cargo test --all-features
-  
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
@@ -33,7 +58,7 @@ jobs:
           components: rustfmt
       - name: Enforce formatting
         run: cargo fmt --check
-  
+
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -42,5 +67,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: arduino/setup-protoc@v3
       - name: Linting
         run: cargo clippy -- -D warnings
