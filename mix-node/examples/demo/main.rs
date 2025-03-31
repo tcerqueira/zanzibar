@@ -7,7 +7,6 @@ use mix_node::{
 };
 use rand::Rng;
 use reqwest::StatusCode;
-use std::time::Instant;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -38,7 +37,6 @@ async fn main() -> anyhow::Result<()> {
     };
 
     println!("Request sent");
-    let start = Instant::now();
     let client = reqwest::Client::new();
     let response = client
         .post(f!("http://localhost:{port}/hamming"))
@@ -48,8 +46,7 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let HammingResponse { hamming_distance } = response.json().await?;
-    assert_eq!(hamming_distance, 0);
-    println!("time: {:?}", Instant::now() - start);
+    println!("hamming distane: {hamming_distance}");
 
     Ok(())
 }

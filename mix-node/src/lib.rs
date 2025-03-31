@@ -51,12 +51,12 @@ impl AppState {
 
 struct CryptoState {
     active_participant: ActiveParticipant<Ristretto>,
-    participants: Vec<ParticipantState>,
+    participants: Vec<ParticipantId>,
 }
 
 #[expect(dead_code)]
 #[derive(Debug, Clone)]
-struct ParticipantState {
+struct ParticipantId {
     index: usize,
     url: String,
 }
@@ -89,7 +89,7 @@ impl TryFrom<CryptoConfig> for CryptoState {
             .participants
             .into_iter()
             .filter(|p| p.index != config.whoami)
-            .map(|p| ParticipantState {
+            .map(|p| ParticipantId {
                 index: p.index,
                 url: p.url,
             })

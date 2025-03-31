@@ -13,12 +13,15 @@ async fn main() -> anyhow::Result<()> {
         .with_test_writer()
         .init();
 
+    let config =
+        config::get_configuration_with(std::env::current_dir()?.join("mix-node").join("config"))?;
+    tracing::info!(?config, "initialize config");
     let Config {
         application: app_config,
         database: db_config,
         crypto: crypto_config,
         ..
-    } = config::get_configuration_with(std::env::current_dir()?.join("mix-node").join("config"))?;
+    } = config;
 
     let address = format!("{}:{}", app_config.host, app_config.port);
     let listener = tokio::net::TcpListener::bind(address).await?;
