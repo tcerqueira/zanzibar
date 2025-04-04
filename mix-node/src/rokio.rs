@@ -6,6 +6,27 @@
 
 use std::panic::{self, AssertUnwindSafe};
 
+/// Spawns a task on the Rayon thread pool and returns a `Future` of the result.
+///
+/// This function bridges the Rayon thread pool with Tokio's async runtime, allowing
+/// CPU-intensive tasks to run without blocking the async executor.
+///
+/// # Panics
+///
+/// If the spawned computation panics, the panic will be propagated to the caller when awaiting
+/// the result.
+///
+/// # Example
+///
+/// ```
+/// # use mix_node::rokio;
+/// # fn expensive_computation() {}
+/// # async fn example() {
+/// let result = rokio::spawn(|| {
+///     expensive_computation()
+/// }).await;
+/// # }
+/// ```
 pub async fn spawn<F, R>(f: F) -> R
 where
     F: FnOnce() -> R + Send + 'static,

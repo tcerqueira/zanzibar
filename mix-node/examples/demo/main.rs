@@ -15,7 +15,8 @@ async fn main() -> anyhow::Result<()> {
         .nth(1)
         .expect("cli arg 'n_bits' missing")
         .parse::<usize>()
-        .expect("cli arg is not a number");
+        .expect("cli arg is not a number")
+        * 2;
     let port = 6000;
     // Request public key
     let client = reqwest::Client::new();

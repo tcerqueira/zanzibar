@@ -1,3 +1,52 @@
+//! Secure cryptographic primitives for threshold ElGamal encryption.
+//!
+//! This module provides a set of tools for encrypted communication with threshold
+//! decryption capabilities using the ElGamal cryptosystem over the Ristretto curve.
+//! The implementation supports distributed key generation, encryption, remixing,
+//! threshold decryption, and verification of decryption shares.
+//!
+//! # Key Features
+//!
+//! * Secure threshold encryption using ElGamal over Ristretto
+//! * Efficient parallel processing with Rayon
+//! * Verifiable decryption shares
+//! * Support for mixing and remixing of ciphertexts
+//! * Hamming distance calculation between bit vectors
+//!
+//! # Examples
+//!
+//! ```
+//! # use anyhow::Result;
+//! # use elastic_elgamal::sharing::{Dealer, Params, PublicKeySet, ActiveParticipant};
+//! # use elastic_elgamal::group::Ristretto;
+//! # use bitvec::prelude::*;
+//! # use mix_node::crypto::*;
+//! # fn main() -> Result<()> {
+//! # let mut rng = rand::thread_rng();
+//! # let params = Params::new(3, 2);
+//! # let dealer = Dealer::<Ristretto>::new(params, &mut rng);
+//! # let (public_poly, poly_proof) = dealer.public_info();
+//! # let key_set = PublicKeySet::new(params, public_poly, poly_proof)?;
+//! # let participants: Vec<_> = (0..3)
+//! #    .map(|i| ActiveParticipant::new(key_set.clone(), i,
+//! #         dealer.secret_share_for_participant(i)).unwrap())
+//! #    .collect();
+//! # let bits = bitvec![1, 0, 1, 0];
+//! // Encrypt data
+//! let encrypted = encrypt(key_set.shared_key(), &bits);
+//!
+//! // Generate decryption shares
+//! let shares = vec![
+//!     decryption_share_for(&participants[0], &encrypted),
+//!     decryption_share_for(&participants[1], &encrypted),
+//! ];
+//!
+//! // Combine shares and decrypt
+//! let decrypted = decrypt_shares(&key_set, &encrypted, &shares)?;
+//! # Ok(())
+//! # }
+//! ```
+
 use anyhow::Context;
 use elastic_elgamal::{
     group::Ristretto,
@@ -9,9 +58,16 @@ use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 use thiserror::Error;
 
+/// An ElGamal ciphertext over the Ristretto curve.
 pub type Ciphertext = elastic_elgamal::Ciphertext<Ristretto>;
+
+/// A bit vector used for storing binary data.
 pub type Bits = bitvec::vec::BitVec;
 
+/// A decryption share from a participant in the threshold encryption scheme.
+///
+/// Contains the participant's index and their decryption shares
+/// for a set of ciphertexts, along with proofs of correctness.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DecryptionShare {
     index: usize,
@@ -19,6 +75,16 @@ pub struct DecryptionShare {
 }
 
 impl DecryptionShare {
+    /// Creates a new decryption share with the given participant index and shares.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The participant's index
+    /// * `share` - A vector of verifiable decryptions with their proofs
+    ///
+    /// # Returns
+    ///
+    /// A new `DecryptionShare` instance
     pub fn new(
         index: usize,
         share: Vec<(VerifiableDecryption<Ristretto>, LogEqualityProof<Ristretto>)>,
@@ -27,15 +93,24 @@ impl DecryptionShare {
     }
 }
 
+/// Discrete logarithm lookup table optimized for binary values.
+///
+/// This static table is used for efficient decryption of binary values (0 or 1).
 pub static LOOKUP_TABLE: LazyLock<DiscreteLogTable<Ristretto>> =
     LazyLock::new(|| DiscreteLogTable::<Ristretto>::new(0..=1));
 
+/// Errors that can occur during cryptographic operations.
 #[derive(Debug, Error)]
 pub enum CryptoError {
+    /// Error indicating invalid or mismatched lengths in cryptographic operations.
     #[error("InvalidLength: {0}")]
     InvalidLength(String),
 }
 
+/// Remixes two ciphertext vectors using ElGamal homomorphic properties.
+///
+/// This function performs remixing operations on two encrypted code vectors.
+/// Both vectors must have the same length, and the length must be even.
 pub fn remix(
     x_code: &mut [Ciphertext],
     y_code: &mut [Ciphertext],
@@ -51,6 +126,10 @@ pub fn remix(
     Ok(())
 }
 
+/// Encrypts a bit vector using the provided public key.
+///
+/// This function encrypts each bit in the input bit vector in parallel
+/// using the ElGamal encryption scheme.
 pub fn encrypt(pub_key: &PublicKey<Ristretto>, bits: &Bits) -> Vec<Ciphertext> {
     bits.as_raw_slice()
         .into_par_iter()
@@ -71,6 +150,10 @@ pub fn encrypt(pub_key: &PublicKey<Ristretto>, bits: &Bits) -> Vec<Ciphertext> {
         .collect::<Vec<_>>()
 }
 
+/// Generates decryption shares for a set of ciphertexts.
+///
+/// This function allows a participant to generate their decryption share
+/// for each ciphertext in the provided array.
 pub fn decryption_share_for(
     active_participant: &ActiveParticipant<Ristretto>,
     ciphertext: &[Ciphertext],
@@ -85,6 +168,10 @@ pub fn decryption_share_for(
     DecryptionShare::new(active_participant.index(), share)
 }
 
+/// Combines decryption shares to recover the original plaintext.
+///
+/// This function verifies and combines decryption shares from multiple
+/// participants to decrypt the original message.
 pub fn decrypt_shares(
     key_set: &PublicKeySet<Ristretto>,
     enc: &[Ciphertext],
@@ -124,6 +211,10 @@ pub fn decrypt_shares(
         .map(Bits::from_iter)
 }
 
+/// Calculates the Hamming distance between two bit vectors.
+///
+/// The Hamming distance is the number of positions at which the corresponding
+/// bits are different.
 pub fn hamming_distance(x_code: Bits, y_code: Bits) -> usize {
     // Q: What if x and y are different sizes?
     (x_code ^ y_code).count_ones()

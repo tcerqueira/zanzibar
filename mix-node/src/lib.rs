@@ -2,7 +2,7 @@ pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod rest;
-pub(crate) mod rokio;
+pub mod rokio;
 pub mod test_helpers;
 
 use config::CryptoConfig;

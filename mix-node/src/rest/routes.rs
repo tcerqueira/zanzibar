@@ -1,3 +1,5 @@
+//! Handlers for the endpoints
+
 use super::error::Error;
 use crate::{
     crypto::{self, Bits, Ciphertext, CryptoError, DecryptionShare},
@@ -12,6 +14,29 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{field, Level, Span};
 
+/// # Remix Endpoint
+///
+/// Creates a new encrypted code pair by mixing the input codes using the
+/// specified encryption key, or the server's shared key if none is provided.
+///
+/// ## Request
+/// - `x_code`: Vector of ciphertexts representing the first code
+/// - `y_code`: Vector of ciphertexts representing the second code
+/// - `enc_key`: Optional encryption key to use (defaults to server's shared key)
+///
+/// ## Response
+/// Returns a JSON object containing the remixed encrypted codes:
+/// ```json
+/// {
+///   "x_code": [...],  // Vector of remixed ciphertexts
+///   "y_code": [...],  // Vector of remixed ciphertexts
+///   "enc_key": null   // The encryption key used (if provided)
+/// }
+/// ```
+///
+/// ## Errors
+/// Check [`super::error`] module.
+///
 #[tracing::instrument(
         skip(state, codes),
         err(Debug, level = Level::ERROR),
@@ -40,11 +65,46 @@ pub async fn remix_handler(
     Ok(Json(codes))
 }
 
+/// # Public Key Set Endpoint
+///
+/// Retrieves the server's public key set for cryptographic operations.
+///
+/// This endpoint returns the PublicKeySet used by the server.
+/// Clients can use this key set to encrypt data that will be processed by the server.
+///
+/// ## Request
+/// No request parameters required.
+///
+/// ## Response
+/// Returns a JSON object containing the server's PublicKeySet.
+///
+/// ## Usage
+/// This endpoint is typically used during initial setup to establish secure communications
+/// with the server before performing encryption or decryption operations.
+///
 #[tracing::instrument(skip(state), ret(Debug, level = Level::TRACE))]
 pub async fn public_key_set(State(state): State<Arc<AppState>>) -> Json<PublicKeySet<Ristretto>> {
     Json(state.pub_key_set().clone())
 }
 
+/// # Encrypt Endpoint
+///
+/// Encrypts a series of bits using the server's active participant key.
+///
+/// This endpoint takes a vector of bits and encrypts each bit individually using
+/// the public key from the active participant's key set. The encryption is performed
+/// using the underlying cryptographic implementation from the `crypto` module.
+///
+/// ## Request
+/// - `bits`: Vector of bits to encrypt (JSON array of boolean values)
+///
+/// ## Response
+/// Returns a JSON array containing ciphertexts for each input bit.
+///
+/// ## Usage
+/// This is commonly used to prepare data for secure computation or storage,
+/// ensuring that the original bit values remain confidential.
+///
 #[tracing::instrument(skip(state, bits), fields(
     pub_key,
     bits_len = bits.len(),
@@ -63,6 +123,23 @@ pub async fn encrypt(
     Json(ciphertexts)
 }
 
+/// # Decrypt Share Endpoint
+///
+/// Generates a decryption share for the provided ciphertexts using the active participant's key.
+///
+/// This endpoint is part of the distributed decryption protocol, where each participant provides
+/// their share of the decryption for the final reconstruction of the plaintext.
+///
+/// ## Request
+/// - `ciphertext`: Vector of ciphertexts requiring decryption shares
+///
+/// ## Response
+/// Returns a JSON object containing a `DecryptionShare`.
+///
+/// ## Usage
+/// This endpoint is typically called during distributed decryption, where multiple participants
+/// each contribute their share to eventually decrypt the complete ciphertext.
+///
 #[tracing::instrument(skip(state, ciphertext), fields(
     ct_len = ciphertext.len(),
 ))]
@@ -83,6 +160,38 @@ pub struct HammingResponse {
     pub hamming_distance: usize,
 }
 
+/// # Hamming Distance Endpoint
+///
+/// Calculates the Hamming distance between two encrypted code sequences through a secure
+/// multi-party computation protocol.
+///
+/// This endpoint performs several cryptographic operations:
+/// 1. Remixes the input codes using the server's shared key
+/// 2. Coordinates remixing with other participants
+/// 3. Collects decryption shares from participants
+/// 4. Decrypts the final results
+/// 5. Computes the Hamming distance between the decrypted codes
+///
+/// ## Request
+/// Takes a JSON object containing:
+/// ```json
+/// {
+///   "x_code": [...],  // First encrypted code sequence
+///   "y_code": [...],  // Second encrypted code sequence
+///   "enc_key": null   // Optional encryption key (unused in this endpoint)
+/// }
+/// ```
+///
+/// ## Response
+/// Returns a JSON object with the calculated Hamming distance:
+/// ```json
+/// {
+///   "hamming_distance": 42  // The Hamming distance between the decrypted codes
+/// }
+/// ```
+///
+/// ## Errors
+/// Check [`super::error`] module.
 #[tracing::instrument(skip(state, codes), ret(Debug, level = Level::TRACE), err(Debug, level = Level::ERROR), fields(hamming_distance))]
 pub async fn hamming_distance(
     State(state): State<Arc<AppState>>,
