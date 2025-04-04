@@ -27,7 +27,6 @@ impl DecryptionShare {
     }
 }
 
-// TODO: lookup table can be just 0..1 in prod
 pub static LOOKUP_TABLE: LazyLock<DiscreteLogTable<Ristretto>> =
     LazyLock::new(|| DiscreteLogTable::<Ristretto>::new(0..=1));
 
@@ -86,7 +85,6 @@ pub fn decryption_share_for(
     DecryptionShare::new(active_participant.index(), share)
 }
 
-// PERF: parallelize this
 pub fn decrypt_shares(
     key_set: &PublicKeySet<Ristretto>,
     enc: &[Ciphertext],
@@ -121,6 +119,7 @@ pub fn decrypt_shares(
                 .context("decrypted values out of range of lookup table")?
                 == 1u64)
         })
+        // PERF: collect directly to BitVec
         .collect::<anyhow::Result<Vec<_>>>()
         .map(Bits::from_iter)
 }

@@ -204,23 +204,11 @@ fn bench_serialization_json(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("to value", |b| {
-        b.iter(|| {
-            let _value = serde_json::to_value(&payload);
-        })
-    });
-
     let payload = payload_subset(&payload, 0..N_SMALL_BITS);
 
     group.bench_function(f!("to string {N_SMALL_BITS} bits subset"), |b| {
         b.iter(|| {
             let _string = serde_json::to_string(&payload);
-        })
-    });
-
-    group.bench_function(f!("to value {N_SMALL_BITS} bits subset"), |b| {
-        b.iter(|| {
-            let _value = serde_json::to_value(&payload);
         })
     });
 }
@@ -263,7 +251,7 @@ pub fn decrypt_bits<'a>(
     pk: &'a SecretKey<Ristretto>,
 ) -> impl Iterator<Item = bool> + 'a {
     ct.iter().map(|ct| {
-        let point = pk.decrypt(*ct, &DiscreteLogTable::new(0..2)).unwrap();
+        let point = pk.decrypt(*ct, &DiscreteLogTable::new(0..=1)).unwrap();
         point != 0u64
     })
 }

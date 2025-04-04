@@ -7,7 +7,6 @@ use anyhow::Context;
 use axum::{extract::State, response::Json};
 use elastic_elgamal::{group::Ristretto, sharing::PublicKeySet};
 use futures::FutureExt;
-// use futures::FutureExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -97,17 +96,14 @@ pub async fn hamming_distance(
     // Remix
     tracing::trace!("remix self");
     let (mut x_code, mut y_code) = {
-        let inner_state = Arc::clone(&state);
+        let state = Arc::clone(&state);
         rokio::spawn(move || -> Result<_, CryptoError> {
-            crypto::remix(
-                &mut x_code,
-                &mut y_code,
-                inner_state.pub_key_set().shared_key(),
-            )?;
+            crypto::remix(&mut x_code, &mut y_code, state.pub_key_set().shared_key())?;
             Ok((x_code, y_code))
         })
         .await?
     };
+    // This algorithm runs serially and it's not fast to serialize and deserialize 2*25600 bits
     tracing::trace!("remix participants");
     for node in &state.crypto.participants {
         (x_code, y_code) = request_remix(
@@ -120,23 +116,30 @@ pub async fn hamming_distance(
         .unwrap_or((x_code, y_code));
         tracing::trace!(id = ?node, "remix participant");
     }
-    let (x_code, y_code) = (Arc::new(x_code), Arc::new(y_code));
+
+    let x_code = Arc::new(x_code);
+    let y_code = Arc::new(y_code);
 
     // Decrypt
     tracing::trace!("request shares");
     let (x_shares, y_shares) = {
-        let (x_state, y_state) = (Arc::clone(&state), Arc::clone(&state));
         let (x_inner_code, y_inner_code) = (Arc::clone(&x_code), Arc::clone(&y_code));
 
         let (mut x_shares, mut y_shares, x_self_share, y_self_share) = tokio::join!(
             request_all_shares(&x_code, &state),
             request_all_shares(&y_code, &state),
-            rokio::spawn(move || {
-                crypto::decryption_share_for(&x_state.crypto.active_participant, &x_inner_code)
-            }),
-            rokio::spawn(move || {
-                crypto::decryption_share_for(&y_state.crypto.active_participant, &y_inner_code)
-            })
+            {
+                let state = Arc::clone(&state);
+                rokio::spawn(move || {
+                    crypto::decryption_share_for(&state.crypto.active_participant, &x_inner_code)
+                })
+            },
+            {
+                let state = Arc::clone(&state);
+                rokio::spawn(move || {
+                    crypto::decryption_share_for(&state.crypto.active_participant, &y_inner_code)
+                })
+            }
         );
         x_shares.push(x_self_share);
         y_shares.push(y_self_share);

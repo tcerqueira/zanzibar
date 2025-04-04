@@ -1,9 +1,3 @@
-use std::net::SocketAddr;
-
-use axum::{extract::ConnectInfo, Router};
-use lambda_http::tower::util::MapRequest;
-use lambda_http::RequestExt;
-use lambda_http::{http::Request, request::RequestContext};
 use mix_node::{
     config::{self, Config},
     db, rest, AppState,
@@ -32,32 +26,5 @@ async fn main() -> Result<(), lambda_http::Error> {
 
     let conn = db::connect_database(db_config);
     let state = AppState::new(app_config.auth_token, conn, crypto_config);
-    lambda_http::run(
-        rest::app(state).layer(MapRequest::<Router, _>::layer(extract_lambda_source_ip)),
-    )
-    .await
-}
-
-fn extract_lambda_source_ip<B>(mut request: Request<B>) -> Request<B> {
-    if request
-        .extensions()
-        .get::<ConnectInfo<SocketAddr>>()
-        .is_some()
-    {
-        return request;
-    }
-
-    let Some(RequestContext::ApiGatewayV2(cx)) = request.request_context_ref() else {
-        return request;
-    };
-
-    let Some(source_ip) = &cx.http.source_ip else {
-        return request;
-    };
-
-    if let Ok(addr) = source_ip.parse::<SocketAddr>() {
-        request.extensions_mut().insert(ConnectInfo(addr));
-    }
-
-    request
+    lambda_http::run(rest::app(state)).await
 }

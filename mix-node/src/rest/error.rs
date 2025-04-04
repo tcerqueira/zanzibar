@@ -18,10 +18,7 @@ impl IntoResponse for Error {
     fn into_response(self) -> Response {
         let status_code = match &self {
             Error::InvalidLength(_) => StatusCode::BAD_REQUEST,
-            Error::Unexpected(_) => {
-                tracing::error!("{self:?}");
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Error::Unexpected(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status_code, self.to_string()).into_response()
     }

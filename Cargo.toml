@@ -2,7 +2,7 @@
 members = ["remix", "mix-node"]
 resolver = "2"
 
-[profile.test]
+[profile.dev]
 opt-level = 1
 
 [profile.release]
@@ -13,4 +13,3 @@ panic = "unwind"
 # Speed up compile time checks for sqlx queries
 [profile.dev.package.sqlx-macros]
 opt-level = 3
-# Cm8IuZ8tbGqRIhjR
