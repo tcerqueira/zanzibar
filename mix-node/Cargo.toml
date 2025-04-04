@@ -1,0 +1,53 @@
+[package]
+name = "mix-node"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Web
+lambda_http = "0.12"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "tracing"] }
+tokio-stream = "0.1"
+axum = { version = "0.7", features = ["macros", "tracing"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tower-http = { version = "0.5", features = ["trace"] }
+# Common
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde-aux = "4"
+remix = { path = "../remix" }
+elastic-elgamal = { version = "0.3", features = ["serde"] }
+rand = { version = "0.8" } # upgrade blocked by elastic-elgamal crate
+rayon = "1"
+mimalloc = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+anyhow = "1"
+sqlx = { version = "0.8", features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-native-tls",
+] }
+bincode = "1"
+secrecy = { version = "0.8", features = ["serde"] }
+config = { version = "0.14", default-features = false, features = [
+    "yaml",
+    "json",
+] }
+reqwest = { version = "0.12", features = ["json"] }
+bitvec = { version = "1", features = ["serde"] }
+
+[dev-dependencies]
+rand = { version = "0.8", features = ["min_const_gen"] }
+criterion = { version = "0.5", features = ["async_tokio"] }
+serde_json = "1"
+
+[[bench]]
+name = "mix_node"
+harness = false
+
+[[bin]]
+name = "mix-node"
+path = "src/bin/lambda.rs"

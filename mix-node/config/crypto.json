@@ -1,0 +1,23 @@
+{
+  "crypto": {
+    "whoami": 0,
+    "key_set": {
+      "params": {
+        "shares": 3,
+        "threshold": 2
+      },
+      "shared_key": "0DONI8XVqM0BDdRTMAzVBcnPmvpvCBVEXWC0MJRSWlg",
+      "participant_keys": [
+        "hpIre2zSXSlc_VeQm3iXs0tI04mQTMOGuqNZ-P97_E4",
+        "BIdIgf4xF_PCX-UMnUR_g3Xl29hqyus1oy7mn-9xcy8",
+        "tpZEuMGqA-JHEGZc86U969bUGogSO0iXKOzgT6ZgSxw"
+      ]
+    },
+    "secret_key": "D7W4K_1QPjuoEQNsTeyWT92yHSPp67-sApmGksw9EQo",
+    "participants": [
+      { "url": "http://localhost:6000", "index": 0 },
+      { "url": "http://localhost:6001", "index": 1 },
+      { "url": "http://localhost:6002", "index": 2 }
+    ]
+  }
+}

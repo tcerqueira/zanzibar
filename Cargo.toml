@@ -1,6 +1,15 @@
 [workspace]
-members = [
-    "remix",
-    "worldcoin",
-]
+members = ["remix", "mix-node"]
 resolver = "2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "unwind"
+
+# Speed up compile time checks for sqlx queries
+[profile.dev.package.sqlx-macros]
+opt-level = 3
