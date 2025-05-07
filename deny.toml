@@ -1,5 +1,0 @@
-[advisories]
-ignore = [
-    # yaml-rust is a dependency of config-rs
-    "RUSTSEC-2024-0320",
-]
